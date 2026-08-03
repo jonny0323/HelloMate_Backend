@@ -1,3 +1,45 @@
 spring:
   application:
     name: HelloMateBackend
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hellomate
+    username: hellomate
+    password: hellomate
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 100
+    show-sql: true
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+
+server:
+  port: 8080
+
+springdoc:
+  swagger-ui:
+    path: /docs
+  api-docs:
+    path: /api-docs
+
+hellomate:
+  jwt:
+    secret: "hellomate-local-dev-secret-key-change-me-in-production-0123456789"
+    access-token-validity-ms: 3600000      # 1h
+    refresh-token-validity-ms: 1209600000  # 14d
+  file:
+    base-url: "https://cdn.hellomate.app"
