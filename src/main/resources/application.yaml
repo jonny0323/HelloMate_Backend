@@ -10,7 +10,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate # Flyway가 스키마를 관리
     open-in-view: false
     properties:
       hibernate:
