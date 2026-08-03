@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: HelloMateBackend
+
+  datasource:
+    url: jdbc:h2:mem:hellomate;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: true
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+
+hellomate:
+  jwt:
+    secret: "hellomate-test-secret-key-0123456789-0123456789"
+    access-token-validity-ms: 3600000
+    refresh-token-validity-ms: 1209600000
+  file:
+    base-url: "https://cdn.hellomate.test"

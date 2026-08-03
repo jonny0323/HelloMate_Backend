@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hellomate-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hellomate
+      POSTGRES_USER: hellomate
+      POSTGRES_PASSWORD: hellomate
+    ports:
+      - "5432:5432"
+    volumes:
+      - hellomate-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  hellomate-postgres-data:
