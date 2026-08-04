@@ -15,6 +15,9 @@ public enum ErrorCode {
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "리프레시 토큰이 유효하지 않습니다."),
     INVALID_INVITE_CODE(HttpStatus.BAD_REQUEST, "초대 코드가 유효하지 않거나 이미 사용되었습니다."),
     STAFF_NOT_VERIFIED(HttpStatus.FORBIDDEN, "아직 승인되지 않은 담당자 계정입니다."),
+    INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "인증번호가 일치하지 않아요."),
+    VERIFICATION_CODE_EXPIRED(HttpStatus.BAD_REQUEST, "인증번호가 만료되었습니다."),
+    INVALID_RESET_TOKEN(HttpStatus.UNAUTHORIZED, "재설정 요청이 만료되었거나 유효하지 않습니다."),
 
     // user
     STUDENT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 학생을 찾을 수 없습니다."),

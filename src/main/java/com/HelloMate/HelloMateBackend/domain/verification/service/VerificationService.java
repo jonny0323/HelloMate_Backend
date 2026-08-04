@@ -40,6 +40,12 @@ public class VerificationService {
         return VerificationDocumentResponse.from(document);
     }
 
+    public VerificationDocumentResponse getMyDocument(String studentId) {
+        VerificationDocument document = verificationDocumentRepository.findTopByStudentIdOrderByCreatedAtDesc(studentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.VERIFICATION_DOCUMENT_NOT_FOUND));
+        return VerificationDocumentResponse.from(document);
+    }
+
     public Page<VerificationDocumentResponse> getDocuments(VerificationStatus status, int page, int size) {
         Page<VerificationDocument> documents = status == null
                 ? verificationDocumentRepository.findAll(PageRequest.of(Math.max(page - 1, 0), size))

@@ -71,6 +71,59 @@
 
 에러 응답: 별도 없음 (공통 에러만 해당).
 
+### `POST /auth/students/password-reset/email` — 인증 불필요
+
+비밀번호 재설정용 인증번호를 이메일로 발송한다(코드 유효시간 5분). 실제 발송은 스텁(`StubEmailService`)이라
+로그에만 코드가 남는다.
+
+요청
+```json
+{ "email": "student123@inu.ac.kr" }
+```
+
+성공 응답 `200`: `{ "success": true, "data": null, "meta": null, "error": null }`
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 404 | `STUDENT_NOT_FOUND` | 해당 학생을 찾을 수 없습니다. | 가입되지 않은 이메일 |
+
+### `POST /auth/students/password-reset/verify` — 인증 불필요
+
+요청
+```json
+{ "email": "student123@inu.ac.kr", "code": "123456" }
+```
+
+성공 응답 `200`
+```json
+{ "success": true, "data": { "resetToken": "b1f2c3d4-..." }, "meta": null, "error": null }
+```
+`resetToken`은 1회용이며 다음 `PATCH /auth/students/password-reset` 호출에만 쓸 수 있다.
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 400 | `INVALID_VERIFICATION_CODE` | 인증번호가 일치하지 않아요. | 코드 불일치 또는 이미 사용된 코드 |
+| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 5분 경과 |
+
+### `PATCH /auth/students/password-reset` — 인증 불필요
+
+요청
+```json
+{ "resetToken": "b1f2c3d4-...", "newPassword": "newPa1234" }
+```
+
+성공 응답 `200`: `data: null`
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 401 | `INVALID_RESET_TOKEN` | 재설정 요청이 만료되었거나 유효하지 않습니다. | 토큰이 존재하지 않거나(이미 사용됨 포함) 만료됨 |
+
 ---
 
 ## 2. 회원가입
@@ -108,6 +161,57 @@
 | --- | --- | --- | --- |
 | 409 | `DUPLICATE_ACCOUNT` | 이미 가입된 계정입니다. | 이메일 중복 |
 | 400 | `INVALID_INPUT` | 존재하지 않는 학교입니다. | `universityId`가 `university` 테이블에 없음 (기본 메시지 대신 커스텀 메시지로 내려감) |
+
+### `POST /auth/students/check-email` — 인증 불필요
+
+이메일(로그인 아이디) 중복 확인. 1/3 화면의 "중복 확인" 버튼용.
+
+요청
+```json
+{ "email": "student123@inu.ac.kr" }
+```
+
+성공 응답 `200`(사용 가능): `data: null`
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 409 | `DUPLICATE_ACCOUNT` | 이미 가입된 계정입니다. | 이메일 중복 |
+
+### `POST /auth/students/email-verifications` — 인증 불필요
+
+가입 단계 학교 이메일 인증(서류 인증과 별개 트랙). 코드 유효시간 5분. 학교 공식 이메일(`.ac.kr`/`.edu`
+접미사)만 허용 — 학교별 도메인 화이트리스트는 아직 없음(스텁 수준 검증).
+
+요청
+```json
+{ "email": "student123@inu.ac.kr" }
+```
+
+성공 응답 `200`: `data: null`
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 400 | `INVALID_INPUT` | 학교 공식 이메일만 사용할 수 있습니다. | `.ac.kr`/`.edu`로 끝나지 않는 이메일 |
+
+### `POST /auth/students/email-verifications/confirm` — 인증 불필요
+
+요청
+```json
+{ "email": "student123@inu.ac.kr", "code": "123456" }
+```
+
+성공 응답 `200`: `data: null`
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 400 | `INVALID_VERIFICATION_CODE` | 인증번호가 일치하지 않아요. | 코드 불일치 또는 이미 사용된 코드 |
+| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 5분 경과 |
 
 ### `POST /files/presigned-url`
 
@@ -168,6 +272,19 @@
 | status | code | message | 조건 |
 | --- | --- | --- | --- |
 | 404 | `FILE_NOT_FOUND` | 해당 파일을 찾을 수 없습니다. | `fileId`가 사전에 업로드된 파일이 아님 |
+
+### `GET /students/me/verification-documents`
+
+본인이 제출한 서류 인증 중 가장 최근 것의 상태를 조회한다. 회원가입 중 "검토 중"/"완료"/"재제출" 폴링과
+마이페이지 "이메일 인증: 학생 인증됨" 뱃지용.
+
+성공 응답 `200`: `POST`와 동일한 `VerificationDocumentResponse` 형태.
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 404 | `VERIFICATION_DOCUMENT_NOT_FOUND` | 해당 재학 인증 서류를 찾을 수 없습니다. | 서류를 한 번도 제출하지 않음 |
 
 ---
 
@@ -569,6 +686,26 @@
 
 에러 응답: `404 STUDENT_NOT_FOUND`.
 
+### `PATCH /students/me/password`
+
+로그인 상태에서 비밀번호를 재설정한다(현재 비밀번호 확인 없이, 이메일 인증코드 방식). 코드는
+`POST /auth/students/password-reset/email`로 본인 이메일에 발송한 뒤 받은 6자리 코드를 그대로 쓴다(로그인
+상태에서도 이 엔드포인트 호출 가능 — 별도 발송 API를 새로 만들지 않고 재사용).
+
+요청
+```json
+{ "code": "123456", "newPassword": "newPa1234" }
+```
+
+성공 응답 `200`: `data: null`
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 400 | `INVALID_VERIFICATION_CODE` | 인증번호가 일치하지 않아요. | 코드 불일치 또는 이미 사용된 코드 |
+| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 5분 경과 |
+
 ---
 
 ## 8. 커뮤니티
@@ -582,7 +719,7 @@
   "data": [
     {
       "id": "post_01h...",
-      "anonName": "익명1",
+      "anonName": "익명 1",
       "title": null,
       "content": "Does anyone know a good Tteokbokki place near the central library?",
       "originalLang": "en",
@@ -607,7 +744,7 @@
 
 성공 응답 `201`
 ```json
-{ "success": true, "data": { "id": "post_02h...", "anonName": "익명5", "createdAt": "2026-08-04T10:00:00" }, "meta": null, "error": null }
+{ "success": true, "data": { "id": "post_02h...", "anonName": "익명 5", "createdAt": "2026-08-04T10:00:00" }, "meta": null, "error": null }
 ```
 
 ### `GET /posts/{postId}`
@@ -620,7 +757,7 @@
   "success": true,
   "data": {
     "id": "post_01h...",
-    "anonName": "익명2",
+    "anonName": "익명 2",
     "title": "기숙사 세탁기가 고장 난 것 같은데",
     "originalLang": "zh",
     "content": "宿舍里的洗衣机好像坏了，有人知道该联系谁修理吗？",
@@ -632,7 +769,7 @@
       {
         "id": "cmt_01h...",
         "parentCommentId": null,
-        "anonName": "익명3",
+        "anonName": "익명 3",
         "content": "작년에는 시험 기간에 밤 11시까지 했어요.",
         "originalLang": "ko",
         "translated": null,
@@ -757,11 +894,7 @@
 않았으므로 여기서는 반복하지 않는다 — 구현 전 설계 단계에서 `api.md`(어떤 화면에 왜 필요한지)와
 `api-errors.md`(어떤 에러 코드가 필요할지 제안)를 먼저 참고할 것.
 
-- 비밀번호 찾기 3종 (`/auth/students/password-reset/*`)
-- 회원가입 이메일 중복확인·이메일 인증코드 4종
-- 서류 인증 상태 조회 (`GET /students/me/verification-documents`)
 - 전공 검색 (`GET /universities/{universityId}/majors`)
 - 클럽 그룹 채팅 2종 (`/clubs/{clubId}/messages`)
 - 알림 피드/설정 5종 (`/notifications/*`)
-- 로그인 상태 비밀번호 변경 (`PATCH /students/me/password`)
 - 내가 작성한 글/댓글 (`GET /posts/mine`, `GET /comments/mine`)

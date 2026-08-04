@@ -72,6 +72,10 @@ public class Student extends BaseTimeEntity {
         this.grade = grade;
     }
 
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
     public void updateProfile(String language, String major, String grade) {
         if (language != null) {
             this.language = language;

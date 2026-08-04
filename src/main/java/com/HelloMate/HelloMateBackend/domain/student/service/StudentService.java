@@ -1,5 +1,7 @@
 package com.HelloMate.HelloMateBackend.domain.student.service;
 
+import com.HelloMate.HelloMateBackend.domain.auth.entity.EmailVerificationPurpose;
+import com.HelloMate.HelloMateBackend.domain.auth.service.EmailVerificationService;
 import com.HelloMate.HelloMateBackend.domain.student.dto.request.StudentProfileUpdateRequest;
 import com.HelloMate.HelloMateBackend.domain.student.dto.response.StudentProfileResponse;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
@@ -7,6 +9,7 @@ import com.HelloMate.HelloMateBackend.domain.student.repository.StudentRepositor
 import com.HelloMate.HelloMateBackend.global.common.exception.BusinessException;
 import com.HelloMate.HelloMateBackend.global.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class StudentService {
 
     private final StudentRepository studentRepository;
+    private final EmailVerificationService emailVerificationService;
+    private final PasswordEncoder passwordEncoder;
 
     public StudentProfileResponse getMyProfile(String studentId) {
         return StudentProfileResponse.from(getStudent(studentId));
@@ -26,6 +31,13 @@ public class StudentService {
         Student student = getStudent(studentId);
         student.updateProfile(request.language(), request.major(), request.grade());
         return StudentProfileResponse.from(student);
+    }
+
+    @Transactional
+    public void changePassword(String studentId, String code, String newPassword) {
+        Student student = getStudent(studentId);
+        emailVerificationService.confirmCode(student.getEmail(), code, EmailVerificationPurpose.PASSWORD_RESET);
+        student.updatePassword(passwordEncoder.encode(newPassword));
     }
 
     public Student getStudent(String studentId) {

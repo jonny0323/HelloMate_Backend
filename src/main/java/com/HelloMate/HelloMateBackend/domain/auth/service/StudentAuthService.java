@@ -2,8 +2,11 @@ package com.HelloMate.HelloMateBackend.domain.auth.service;
 
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.StudentLoginRequest;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.StudentSignUpRequest;
+import com.HelloMate.HelloMateBackend.domain.auth.dto.response.PasswordResetVerifyResponse;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.response.StudentSignUpResponse;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.response.TokenResponse;
+import com.HelloMate.HelloMateBackend.domain.auth.entity.EmailVerification;
+import com.HelloMate.HelloMateBackend.domain.auth.entity.EmailVerificationPurpose;
 import com.HelloMate.HelloMateBackend.domain.auth.entity.RefreshToken;
 import com.HelloMate.HelloMateBackend.domain.auth.repository.RefreshTokenRepository;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
@@ -32,6 +35,7 @@ public class StudentAuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final EmailVerificationService emailVerificationService;
 
     @Transactional
     public StudentSignUpResponse signUp(StudentSignUpRequest request) {
@@ -87,6 +91,39 @@ public class StudentAuthService {
     @Transactional
     public void logout(String studentId) {
         refreshTokenRepository.deleteBySubjectIdAndRole(studentId, Role.STUDENT);
+    }
+
+    public void checkEmailAvailable(String email) {
+        if (studentRepository.existsByEmail(email)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_ACCOUNT);
+        }
+    }
+
+    public void sendSignupVerificationCode(String email) {
+        emailVerificationService.sendCode(email, EmailVerificationPurpose.SIGNUP);
+    }
+
+    public void confirmSignupVerificationCode(String email, String code) {
+        emailVerificationService.confirmCode(email, code, EmailVerificationPurpose.SIGNUP);
+    }
+
+    public void sendPasswordResetCode(String email) {
+        studentRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+        emailVerificationService.sendCode(email, EmailVerificationPurpose.PASSWORD_RESET);
+    }
+
+    public PasswordResetVerifyResponse verifyPasswordResetCode(String email, String code) {
+        EmailVerification verification = emailVerificationService.confirmCode(email, code, EmailVerificationPurpose.PASSWORD_RESET);
+        return new PasswordResetVerifyResponse(verification.getResetToken());
+    }
+
+    @Transactional
+    public void resetPassword(String resetToken, String newPassword) {
+        EmailVerification verification = emailVerificationService.consumeResetToken(resetToken);
+        Student student = studentRepository.findByEmail(verification.getEmail())
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+        student.updatePassword(passwordEncoder.encode(newPassword));
     }
 
     private TokenResponse issueTokens(String studentId) {
