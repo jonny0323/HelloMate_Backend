@@ -30,13 +30,28 @@
 - **코드 유효시간**: 5분 고정(와이어프레임 `00:00` 타이머와 일치). 재사용/재확인 방지를 위해
   `EmailVerification.used` 플래그와 `resetToken` 1회성 무효화(`invalidateResetToken`)를 둠.
 
-## CLAUDE.md와 실제 설정이 다른 부분 발견 (이번 작업 범위 아님, 확인 필요)
+## CLAUDE.md와 실제 설정이 다른 부분 발견 → V1 마이그레이션 채워 넣음 (추가 작업)
 
 CLAUDE.md는 "`ddl-auto: update` 쓰는 중"이라고 되어 있지만, 실제 `application.yaml`은
-`ddl-auto: validate` + Flyway(`V1__init_schema.sql`)로 스키마를 관리하고 있었다. 다만 `V1__init_schema.sql`이
-현재 빈 파일(0줄)이라 Postgres 실 스키마의 소스가 불명확하다 — 이번 작업으로 만든 문제는 아니고 기존
-갭이니, 다음에 Postgres 붙여서 확인할 때 CLAUDE.md 갱신 여부와 함께 짚고 넘어가면 좋겠다. 신규 테이블은
-`V2__add_email_verification.sql`로 추가해 Postgres 경로도 일단 일관되게는 맞춰뒀다(V1은 손대지 않음).
+`ddl-auto: validate` + Flyway로 스키마를 관리하고 있었다. 그런데 `V1__init_schema.sql`이 빈 파일(0줄)이라,
+새 Postgres에 `flyway migrate`를 돌리면 `email_verification`(V2) 테이블만 생기고 나머지 기존 테이블(users,
+club, notice, post, chat_thread 등)은 하나도 안 생겨서 앱이 시작조차 안 되는 상태였다. 사용자 확인 후
+V1을 원래 스키마(기존 엔티티 23종 전체)로 채워 넣었다:
+
+- 로컬에 Docker/Postgres가 전혀 떠 있지 않고(`docker volume ls`/`docker ps` 모두 비어있음, `docker info` 자체가
+  실패) V1이 어제 빈 파일로 커밋된 뒤 한 번도 수정되지 않은 것을 git log로 확인 — 즉 이 V1을 실제로
+  `flyway migrate`한 환경이 없었다는 뜻이라 지금 채워도 체크섬 충돌이 날 곳이 없다.
+- 모든 엔티티(`domain/**/entity/*.java`)를 직접 읽어 컬럼 타입/길이/nullable/유니크 제약/FK를 그대로
+  옮겼다. `refresh_token`, `post_anon_participant`는 `BaseTimeEntity`를 상속하지 않아 `created_at`/`updated_at`이
+  없다는 것도 코드 기준으로 정확히 반영.
+- **실제로 검증**: H2를 PostgreSQL 호환 모드(`MODE=PostgreSQL`)의 파일 DB로 띄우고, `ddl-auto: validate` +
+  `spring.flyway.enabled: true`로 임시 테스트 프로파일을 만들어 `V1`+`V2`를 실제로 migrate시킨 뒤 Spring
+  컨텍스트가 정상 기동되는지 확인했다 — Flyway가 두 마이그레이션을 순서대로 적용하고, Hibernate
+  `validate`가 전체 엔티티에 대해 통과함을 로그로 직접 확인(`Initialized JPA EntityManagerFactory` 성공,
+  검증 에러 없음). 검증에 쓴 임시 파일(`SchemaValidateCheckTest.java`,
+  `application-schemacheck.yaml`)은 확인 후 삭제했다.
+- CLAUDE.md의 "ddl-auto: update 쓰는 중" 문구는 이제 실제와 다르므로 갱신이 필요하다(이번엔 안 건드림 —
+  원하면 별도로 반영).
 
 ## 빌드/테스트 결과
 
