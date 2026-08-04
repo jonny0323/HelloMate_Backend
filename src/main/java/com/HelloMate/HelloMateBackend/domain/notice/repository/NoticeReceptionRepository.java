@@ -24,8 +24,10 @@ public interface NoticeReceptionRepository extends JpaRepository<NoticeReception
     void deleteByNoticeId(String noticeId);
 
     @Query("select r from NoticeReception r where r.student.id = :studentId "
+            + "and (:keyword is null or r.notice.title like %:keyword% or r.notice.content like %:keyword%) "
             + "and (:cursor is null or r.createdAt < :cursor) order by r.createdAt desc")
     Slice<NoticeReception> findByStudentIdOrderByCreatedAtDesc(@Param("studentId") String studentId,
+                                                                @Param("keyword") String keyword,
                                                                 @Param("cursor") LocalDateTime cursor,
                                                                 Pageable pageable);
 

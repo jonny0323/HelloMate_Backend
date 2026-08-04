@@ -31,9 +31,10 @@ public class StudentNoticeController {
     @GetMapping
     public ApiResponse<Object> getMyNotices(@CurrentUser AuthPrincipal principal,
                                              @RequestParam(required = false) String groupBy,
+                                             @RequestParam(required = false) String q,
                                              @RequestParam(required = false) String cursor,
                                              @RequestParam(defaultValue = "20") int limit) {
-        Slice<NoticeReception> slice = noticeQueryService.getMyNoticeSlice(principal.id(), cursor, limit);
+        Slice<NoticeReception> slice = noticeQueryService.getMyNoticeSlice(principal.id(), q, cursor, limit);
         return ApiResponse.ok(noticeQueryService.toResponseData(slice, groupBy), noticeQueryService.cursorMetaOf(slice));
     }
 

@@ -315,9 +315,12 @@
 
 ## 3. 공지사항
 
-### `GET /notices?groupBy=&cursor=&limit=`
+### `GET /notices?groupBy=&q=&cursor=&limit=`
 
-`groupBy=department`를 주면 데이터가 배열이 아니라 부서별 맵으로 내려온다(둘 다 실제 응답 형태).
+`groupBy=department`를 주면 데이터가 배열이 아니라 부서별 맵으로 내려온다(둘 다 실제 응답 형태). `q`는
+제목+본문 부분일치 검색이고 `groupBy`와 동시에 쓸 수 있다(부서 필터 화면의 "검색+카테고리 필터" 요구
+사항). 통합 검색(`/search`, 9번 섹션)과는 별개 — `/search`는 부서 필터를 못 걸어서 이 파라미터를
+따로 뒀다.
 
 성공 응답 `200` — 기본(`groupBy` 없음)
 ```json

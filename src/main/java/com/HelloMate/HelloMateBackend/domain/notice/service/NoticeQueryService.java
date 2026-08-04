@@ -36,9 +36,9 @@ public class NoticeQueryService {
     private final NoticeFileRepository noticeFileRepository;
     private final TranslationService translationService;
 
-    public Slice<NoticeReception> getMyNoticeSlice(String studentId, String cursor, int limit) {
+    public Slice<NoticeReception> getMyNoticeSlice(String studentId, String keyword, String cursor, int limit) {
         return noticeReceptionRepository.findByStudentIdOrderByCreatedAtDesc(
-                studentId, CursorPageUtil.decode(cursor), PageRequest.of(0, limit));
+                studentId, keyword, CursorPageUtil.decode(cursor), PageRequest.of(0, limit));
     }
 
     public Object toResponseData(Slice<NoticeReception> slice, String groupBy) {
