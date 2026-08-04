@@ -213,6 +213,31 @@
 | 400 | `INVALID_VERIFICATION_CODE` | 인증번호가 일치하지 않아요. | 코드 불일치 또는 이미 사용된 코드 |
 | 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 5분 경과 |
 
+### `GET /universities/{universityId}/majors?query=` — 인증 불필요
+
+3/3 단계(학교 정보) 전공 자동완성. `query` 생략하면 해당 학교 전공 전체 목록. **지금 시드 데이터는
+플레이스홀더**다(컴퓨터공학부/경영학과 등 흔한 학과명 10개) — 인천대 공식 학과 목록이 아니니 실제
+데이터로 교체 전까지는 자동완성 결과가 정확하지 않을 수 있다.
+
+성공 응답 `200`
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "major-inu-placeholder-01", "name": "컴퓨터공학부" },
+    { "id": "major-inu-placeholder-02", "name": "소프트웨어학과" }
+  ],
+  "meta": null,
+  "error": null
+}
+```
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 400 | `INVALID_INPUT` | 존재하지 않는 학교입니다. | 잘못된 `universityId` |
+
 ### `POST /files/presigned-url`
 
 서류 사진(학생증 등) 업로드 전에 먼저 호출한다.
