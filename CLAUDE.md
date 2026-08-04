@@ -60,8 +60,12 @@ DTO 리턴하지 마라. JSON은 snake_case로 나간다(Jackson 전역 설정) 
 
 - `ChatMessage`에 `context_type`/`context_id` 없음 → "이 공지 문의하기" 같은 딥링크 채팅 아직 못 만듦
 - JWT에 `university_id` 클레임 없음
-- `ddl-auto: update` 쓰는 중이다 — 컬럼 하나 잘못 바꾸면 로컬/스테이징 스키마 조용히 틀어진다,
-  마이그레이션 도구 들어오기 전까진 손대는 사람이 직접 확인해야 한다
+- `ddl-auto: validate` + Flyway(`src/main/resources/db/migration/V*__*.sql`)로 스키마를 관리한다.
+  엔티티에 컬럼/테이블을 추가·변경하면 반드시 새 `V{n}__*.sql` 마이그레이션도 같이 추가해야
+  Postgres에서 `validate`가 통과한다 — 엔티티만 고치고 마이그레이션을 빼먹으면 앱이 기동 자체가
+  안 된다. 이미 적용된 `V` 파일은 체크섬 때문에 수정하지 말고 새 버전을 추가할 것. 테스트는 H2
+  `ddl-auto: create-drop`이라 마이그레이션 없이도 통과하니, 로컬에서 `./gradlew test`만 돌려서는 이
+  실수를 못 잡는다 — Postgres 붙여서 확인하거나 리뷰 때 마이그레이션 파일 존재 여부를 챙길 것.
 
 ## 문서 — `docs/`
 
