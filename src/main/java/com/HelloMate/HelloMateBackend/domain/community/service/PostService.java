@@ -15,6 +15,8 @@ import com.HelloMate.HelloMateBackend.domain.community.repository.PostCommentLik
 import com.HelloMate.HelloMateBackend.domain.community.repository.PostCommentRepository;
 import com.HelloMate.HelloMateBackend.domain.community.repository.PostLikeRepository;
 import com.HelloMate.HelloMateBackend.domain.community.repository.PostRepository;
+import com.HelloMate.HelloMateBackend.domain.notification.entity.NotificationCategory;
+import com.HelloMate.HelloMateBackend.domain.notification.service.NotificationService;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
 import com.HelloMate.HelloMateBackend.domain.student.service.StudentService;
 import com.HelloMate.HelloMateBackend.domain.translation.dto.response.TranslatedContent;
@@ -49,6 +51,7 @@ public class PostService {
     private final PostAnonService postAnonService;
     private final StudentService studentService;
     private final TranslationService translationService;
+    private final NotificationService notificationService;
 
     @Transactional
     public CreatePostResponse createPost(String studentId, CreatePostRequest request) {
@@ -168,6 +171,10 @@ public class PostService {
         Student student = studentService.getStudent(studentId);
         postLikeRepository.save(new PostLike(UuidCreator.create(), post, student));
         post.increaseLike();
+        if (!post.getAuthor().getId().equals(studentId)) {
+            notificationService.notify(post.getAuthor(), NotificationCategory.COMMUNITY,
+                    "내 게시글에 좋아요가 달렸어요", "post", post.getId());
+        }
     }
 
     @Transactional
@@ -191,6 +198,10 @@ public class PostService {
         PostComment comment = new PostComment(UuidCreator.create(), post, author, parent, request.content(), originalLang);
         postCommentRepository.save(comment);
         post.increaseComment();
+        if (!post.getAuthor().getId().equals(studentId)) {
+            notificationService.notify(post.getAuthor(), NotificationCategory.COMMUNITY,
+                    "내 게시글에 댓글이 달렸어요", "post", post.getId());
+        }
 
         String anonName = postAnonService.getOrAssignAnonName(post, author);
         return new PostCommentResponse(comment.getId(), parent == null ? null : parent.getId(), anonName,
@@ -216,6 +227,10 @@ public class PostService {
         Student student = studentService.getStudent(studentId);
         postCommentLikeRepository.save(new PostCommentLike(UuidCreator.create(), comment, student));
         comment.increaseLike();
+        if (!comment.getAuthor().getId().equals(studentId)) {
+            notificationService.notify(comment.getAuthor(), NotificationCategory.COMMUNITY,
+                    "내 댓글에 좋아요가 달렸어요", "post", comment.getPost().getId());
+        }
     }
 
     @Transactional

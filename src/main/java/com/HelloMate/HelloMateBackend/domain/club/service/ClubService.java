@@ -11,6 +11,8 @@ import com.HelloMate.HelloMateBackend.domain.club.entity.ClubMessage;
 import com.HelloMate.HelloMateBackend.domain.club.repository.ClubMemberRepository;
 import com.HelloMate.HelloMateBackend.domain.club.repository.ClubMessageRepository;
 import com.HelloMate.HelloMateBackend.domain.club.repository.ClubRepository;
+import com.HelloMate.HelloMateBackend.domain.notification.entity.NotificationCategory;
+import com.HelloMate.HelloMateBackend.domain.notification.service.NotificationService;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
 import com.HelloMate.HelloMateBackend.domain.student.service.StudentService;
 import com.HelloMate.HelloMateBackend.global.common.exception.BusinessException;
@@ -37,6 +39,7 @@ public class ClubService {
     private final ClubMemberRepository clubMemberRepository;
     private final ClubMessageRepository clubMessageRepository;
     private final StudentService studentService;
+    private final NotificationService notificationService;
 
     public List<ClubResponse> getClubs(String studentId, String status) {
         Student student = studentService.getStudent(studentId);
@@ -93,6 +96,8 @@ public class ClubService {
         Student student = studentService.getStudent(studentId);
         clubMemberRepository.save(new ClubMember(UuidCreator.create(), club, student));
         club.increaseMember();
+        notificationService.notify(club.getCreator(), NotificationCategory.CLUB,
+                "클럽에 새 멤버가 참여했어요", "club", club.getId());
     }
 
     @Transactional

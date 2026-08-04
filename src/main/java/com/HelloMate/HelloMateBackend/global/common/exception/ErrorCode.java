@@ -51,7 +51,10 @@ public enum ErrorCode {
     VERIFICATION_DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 재학 인증 서류를 찾을 수 없습니다."),
 
     // file
-    FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 파일을 찾을 수 없습니다.");
+    FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 파일을 찾을 수 없습니다."),
+
+    // notification
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 알림을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

@@ -10,9 +10,12 @@ import com.HelloMate.HelloMateBackend.domain.honeytip.entity.HoneyTip;
 import com.HelloMate.HelloMateBackend.domain.honeytip.entity.HoneyTipEdit;
 import com.HelloMate.HelloMateBackend.domain.honeytip.repository.HoneyTipEditRepository;
 import com.HelloMate.HelloMateBackend.domain.honeytip.repository.HoneyTipRepository;
+import com.HelloMate.HelloMateBackend.domain.notification.entity.NotificationCategory;
+import com.HelloMate.HelloMateBackend.domain.notification.service.NotificationService;
 import com.HelloMate.HelloMateBackend.domain.staff.entity.Staff;
 import com.HelloMate.HelloMateBackend.domain.staff.service.StaffService;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
+import com.HelloMate.HelloMateBackend.domain.student.repository.StudentRepository;
 import com.HelloMate.HelloMateBackend.domain.student.service.StudentService;
 import com.HelloMate.HelloMateBackend.global.common.exception.BusinessException;
 import com.HelloMate.HelloMateBackend.global.common.exception.ErrorCode;
@@ -32,6 +35,8 @@ public class HoneyTipService {
     private final HoneyTipEditRepository honeyTipEditRepository;
     private final StudentService studentService;
     private final StaffService staffService;
+    private final StudentRepository studentRepository;
+    private final NotificationService notificationService;
 
     public List<HoneyTipResponse> getHoneyTips(String studentId, String category) {
         Student student = studentService.getStudent(studentId);
@@ -60,6 +65,12 @@ public class HoneyTipService {
         HoneyTip honeyTip = new HoneyTip(UuidCreator.create(), author.getUniversity(), author,
                 request.category(), request.title(), request.content());
         honeyTipRepository.save(honeyTip);
+
+        for (Student student : studentRepository.findAllByUniversityId(author.getUniversity().getId())) {
+            notificationService.notify(student, NotificationCategory.HONEY_TIP, honeyTip.getTitle(),
+                    "honey_tip", honeyTip.getId());
+        }
+
         return HoneyTipResponse.from(honeyTip);
     }
 

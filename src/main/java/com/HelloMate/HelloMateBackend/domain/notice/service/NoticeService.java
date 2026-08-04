@@ -15,6 +15,8 @@ import com.HelloMate.HelloMateBackend.domain.notice.entity.NoticeReception;
 import com.HelloMate.HelloMateBackend.domain.notice.repository.NoticeFileRepository;
 import com.HelloMate.HelloMateBackend.domain.notice.repository.NoticeReceptionRepository;
 import com.HelloMate.HelloMateBackend.domain.notice.repository.NoticeRepository;
+import com.HelloMate.HelloMateBackend.domain.notification.entity.NotificationCategory;
+import com.HelloMate.HelloMateBackend.domain.notification.service.NotificationService;
 import com.HelloMate.HelloMateBackend.domain.staff.entity.Staff;
 import com.HelloMate.HelloMateBackend.domain.staff.service.StaffService;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
@@ -42,6 +44,7 @@ public class NoticeService {
     private final StudentRepository studentRepository;
     private final UploadedFileRepository uploadedFileRepository;
     private final StaffService staffService;
+    private final NotificationService notificationService;
 
     @Transactional
     public CreateNoticeResponse createAndSend(String staffId, CreateNoticeRequest request) {
@@ -54,6 +57,7 @@ public class NoticeService {
         List<Student> recipients = resolveAudience(author.getUniversity().getId(), request.audience());
         for (Student student : recipients) {
             noticeReceptionRepository.save(new NoticeReception(UuidCreator.create(), notice, student));
+            notificationService.notify(student, NotificationCategory.NOTICE, notice.getTitle(), "notice", notice.getId());
         }
         notice.assignRecipientCount(recipients.size());
 

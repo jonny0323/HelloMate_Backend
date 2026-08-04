@@ -619,10 +619,7 @@
 
 ---
 
-## 6. 알람 — 채팅
-
-와이어프레임의 "알림" 탭(공지/커뮤니티/클럽/생활정보 알림 피드)과 "알림 설정"은 아직 구현되어 있지 않다
-(`api.md`/`api-errors.md`의 🆕 항목 참고). 아래는 이미 구현된 "채팅" 탭 관련 API다.
+## 6. 알람 — 채팅/알림
 
 ### `POST /chats/threads`
 
@@ -711,6 +708,86 @@
 { "success": true, "data": { "count": 2 }, "meta": null, "error": null }
 ```
 에러 응답: 별도 없음.
+
+### `GET /notifications?category=&cursor=&limit=`
+
+"알림" 탭 피드. `category`는 `notice`/`community`/`club`/`honey_tip` 중 하나(생략하면 전체). **채팅
+알림(`chat_direct`/`chat_club`)은 이 피드에 안 쌓인다** — 채팅은 이미 `chats/threads`가 자체
+읽음/안읽음을 관리하고 있어서 별도 알림 행을 안 만든다(`api.md`의 필터 목록도 채팅은 빼고
+전체/공지/커뮤니티/클럽/생활정보 4개만 나열함). "오늘/어제 구분"은 프론트가 `createdAt` 기준으로
+그린다(서버가 미리 그룹핑해서 내려주지 않음).
+
+성공 응답 `200`
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "notif_01h...", "category": "notice", "title": "2024 글로벌 문화 교류 축제", "linkType": "notice", "linkId": "notice_01h...", "read": false, "createdAt": "2026-08-04T09:00:00" }
+  ],
+  "meta": { "nextCursor": null, "hasNext": false, "size": 1 },
+  "error": null
+}
+```
+`category`는 `"chat_direct" | "chat_club" | "notice" | "community" | "club" | "honey_tip" | "system"`
+중 하나(실제로 피드에 쌓이는 건 `chat_*`를 뺀 나머지). `linkType`/`linkId`로 프론트가 딥링크한다
+(`notice`→공지 상세, `post`→게시글 상세, `club`→클럽 상세, `honey_tip`→정보글 상세).
+
+에러 응답: 별도 없음.
+
+### `PATCH /notifications/{notificationId}/read`
+
+요청 바디 없음. 성공 응답 `200`: `data: null`.
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 404 | `NOTIFICATION_NOT_FOUND` | 해당 알림을 찾을 수 없습니다. | 본인 알림이 아니거나 존재하지 않음 |
+
+### `GET /notifications/unread-count`
+
+성공 응답 `200`: `{ "success": true, "data": { "count": 3 }, "meta": null, "error": null }`
+
+### `GET /notifications/settings`
+
+채팅 토글 2개(`chat_direct`/`chat_club`) + 서비스 토글 5개(`notice`/`community`/`club`/`honey_tip`/`system`),
+총 7개를 항상 전부 내려준다(따로 설정한 적 없으면 `enabled: true` 기본값). `system`은 `required: true`라서
+끌 수 없다.
+
+성공 응답 `200`
+```json
+{
+  "success": true,
+  "data": [
+    { "category": "chat_direct", "enabled": true, "required": false },
+    { "category": "chat_club", "enabled": true, "required": false },
+    { "category": "notice", "enabled": true, "required": false },
+    { "category": "community", "enabled": true, "required": false },
+    { "category": "club", "enabled": true, "required": false },
+    { "category": "honey_tip", "enabled": true, "required": false },
+    { "category": "system", "enabled": true, "required": true }
+  ],
+  "meta": null,
+  "error": null
+}
+```
+
+### `PATCH /notifications/settings`
+
+여러 카테고리를 한 번에 바꿀 수 있다.
+
+요청
+```json
+{ "settings": [ { "category": "community", "enabled": false }, { "category": "honey_tip", "enabled": false } ] }
+```
+
+성공 응답 `200`: 변경 반영된 `GET /notifications/settings`와 동일한 목록.
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 400 | `INVALID_INPUT` | 시스템 안내는 끌 수 없습니다. | `category: "system"`을 `enabled: false`로 끄려는 요청 |
 
 ---
 
@@ -993,13 +1070,10 @@
 
 ---
 
-## 미구현 API (🆕)
+## 남은 갭
 
-아래는 `api.md`에서 화면상 필요하다고 표시했지만 아직 코드가 없는 엔드포인트다. 요청/응답 형태가 확정되지
-않았으므로 여기서는 반복하지 않는다 — 구현 전 설계 단계에서 `api.md`(어떤 화면에 왜 필요한지)와
-`api-errors.md`(어떤 에러 코드가 필요할지 제안)를 먼저 참고할 것.
-
-- 전공 검색 (`GET /universities/{universityId}/majors`)
-- 클럽 그룹 채팅 2종 (`/clubs/{clubId}/messages`)
-- 알림 피드/설정 5종 (`/notifications/*`)
-- 내가 작성한 글/댓글 (`GET /posts/mine`, `GET /comments/mine`)
+- 마이페이지 "이름/국적/출생연도 수정" — `StudentProfileUpdateRequest`는 `language`/`major`/`grade`만
+  받는다(7번 섹션 참고).
+- 서비스 이용약관 전체보기 API(`GET /terms/service`) — 현재 없음, 필요하면 정적 페이지/앱 내
+  하드코딩으로 대체 가능.
+- 커뮤니티 게시글 검색(`GET /posts?q=`) — 9번 섹션의 통합 검색은 공지/생활정보만 다룸.
