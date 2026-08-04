@@ -29,7 +29,8 @@ public class StudentService {
     @Transactional
     public StudentProfileResponse updateMyProfile(String studentId, StudentProfileUpdateRequest request) {
         Student student = getStudent(studentId);
-        student.updateProfile(request.language(), request.major(), request.grade());
+        student.updateProfile(request.name(), request.country(), request.birthYear(),
+                request.language(), request.major(), request.grade());
         return StudentProfileResponse.from(student);
     }
 

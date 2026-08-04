@@ -58,6 +58,8 @@ public class Student extends BaseTimeEntity {
     @Column(length = 20)
     private String grade;
 
+    private Integer birthYear;
+
     public Student(String id, University university, String email, String name, String password, String country,
                    String language, StudentType studentType, String major, String grade) {
         this.id = id;
@@ -76,7 +78,16 @@ public class Student extends BaseTimeEntity {
         this.password = encodedPassword;
     }
 
-    public void updateProfile(String language, String major, String grade) {
+    public void updateProfile(String name, String country, Integer birthYear, String language, String major, String grade) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (country != null) {
+            this.country = country;
+        }
+        if (birthYear != null) {
+            this.birthYear = birthYear;
+        }
         if (language != null) {
             this.language = language;
         }

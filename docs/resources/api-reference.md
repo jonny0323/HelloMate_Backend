@@ -804,6 +804,7 @@
     "email": "student123@inu.ac.kr",
     "name": "김지수",
     "country": "KR",
+    "birthYear": 2001,
     "language": "ko",
     "studentType": "정규과정생",
     "major": "컴퓨터공학부",
@@ -814,16 +815,17 @@
   "error": null
 }
 ```
+`birthYear`는 가입 시점엔 안 받고 마이페이지에서만 채울 수 있어서, 아직 입력한 적 없는 학생은 `null`.
 
 에러 응답: `404 STUDENT_NOT_FOUND` (토큰은 유효한데 학생 레코드가 없는 예외적인 경우 — 정상 플로우에선 거의
 발생하지 않음).
 
 ### `PATCH /students/me`
 
-요청 — **`language`, `major`, `grade`만 수정 가능**. 와이어프레임의 "내 정보 수정" 화면엔 이름/국적/출생연도
-입력 필드도 있지만, 지금 `StudentProfileUpdateRequest`는 이 세 필드만 받는다(`api.md` 7번 섹션 갭 참고).
+요청 — 전부 선택값(null이 아닌 필드만 반영). `name`/`country`를 열어주는 것과 서류 인증(재학증명서 등)
+실명 불일치 리스크는 자동 검증하지 않는다 — 서류 인증 검토 단계에서 담당자가 걸러내는 걸 전제로 한다.
 ```json
-{ "language": "en", "major": "소프트웨어학과", "grade": "2학년" }
+{ "name": "김지수", "country": "KR", "birthYear": 2001, "language": "en", "major": "소프트웨어학과", "grade": "2학년" }
 ```
 
 성공 응답 `200`: 수정된 `StudentProfileResponse` (위와 동일 형태).
