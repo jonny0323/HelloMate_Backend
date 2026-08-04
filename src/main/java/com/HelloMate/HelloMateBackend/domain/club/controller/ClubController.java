@@ -1,15 +1,19 @@
 package com.HelloMate.HelloMateBackend.domain.club.controller;
 
 import com.HelloMate.HelloMateBackend.domain.club.dto.request.CreateClubRequest;
+import com.HelloMate.HelloMateBackend.domain.club.dto.request.SendClubMessageRequest;
 import com.HelloMate.HelloMateBackend.domain.club.dto.request.UpdateClubRequest;
 import com.HelloMate.HelloMateBackend.domain.club.dto.response.ClubMemberResponse;
+import com.HelloMate.HelloMateBackend.domain.club.dto.response.ClubMessageResponse;
 import com.HelloMate.HelloMateBackend.domain.club.dto.response.ClubResponse;
+import com.HelloMate.HelloMateBackend.domain.club.entity.ClubMessage;
 import com.HelloMate.HelloMateBackend.domain.club.service.ClubService;
 import com.HelloMate.HelloMateBackend.global.common.response.ApiResponse;
 import com.HelloMate.HelloMateBackend.global.security.AuthPrincipal;
 import com.HelloMate.HelloMateBackend.global.security.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Slice;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -81,5 +85,20 @@ public class ClubController {
     @GetMapping("/{clubId}/members")
     public ApiResponse<List<ClubMemberResponse>> getMembers(@CurrentUser AuthPrincipal principal, @PathVariable String clubId) {
         return ApiResponse.ok(clubService.getMembers(principal.id(), clubId));
+    }
+
+    @PostMapping("/{clubId}/messages")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<ClubMessageResponse> sendMessage(@CurrentUser AuthPrincipal principal, @PathVariable String clubId,
+                                                         @Valid @RequestBody SendClubMessageRequest request) {
+        return ApiResponse.ok(clubService.sendMessage(principal.id(), clubId, request.content()));
+    }
+
+    @GetMapping("/{clubId}/messages")
+    public ApiResponse<List<ClubMessageResponse>> getMessages(@CurrentUser AuthPrincipal principal, @PathVariable String clubId,
+                                                               @RequestParam(required = false) String cursor,
+                                                               @RequestParam(defaultValue = "20") int limit) {
+        Slice<ClubMessage> slice = clubService.getMessageSlice(principal.id(), clubId, cursor, limit);
+        return ApiResponse.ok(clubService.toMessageList(slice), clubService.messageCursorMetaOf(slice));
     }
 }

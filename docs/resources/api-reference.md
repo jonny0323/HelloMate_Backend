@@ -506,6 +506,47 @@
 | 404 | `CLUB_NOT_FOUND` | 해당 클럽을 찾을 수 없습니다. | |
 | 403 | `FORBIDDEN` | 접근 권한이 없습니다. | **개설자만 멤버 목록을 볼 수 있음** — 일반 멤버가 호출해도 403 (와이어프레임엔 멤버도 볼 수 있는 것처럼 보이니 프론트 연동 시 주의) |
 
+### `POST /clubs/{clubId}/messages`
+
+클럽 그룹 채팅 메시지 전송. 커뮤니티 게시글과 달리 멤버끼리는 서로 이름을 안다는 전제라
+익명화하지 않는다.
+
+요청
+```json
+{ "content": "이번 주 금요일 모임 장소 정했어요!" }
+```
+
+성공 응답 `201`
+```json
+{
+  "success": true,
+  "data": { "id": "cmsg_01h...", "senderId": "stu_03h...", "senderName": "Ji-won Kim", "content": "이번 주 금요일 모임 장소 정했어요!", "createdAt": "2026-08-04T10:00:00" },
+  "meta": null,
+  "error": null
+}
+```
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 404 | `CLUB_NOT_FOUND` | 해당 클럽을 찾을 수 없습니다. | |
+| 400 | `NOT_CLUB_MEMBER` | 클럽에 참여 중이 아닙니다. | 멤버(개설자 포함)만 전송 가능 — `leave`와 동일 코드/상태 재사용 |
+
+### `GET /clubs/{clubId}/messages?cursor=&limit=`
+
+성공 응답 `200`
+```json
+{
+  "success": true,
+  "data": [ { "id": "cmsg_01h...", "senderId": "stu_03h...", "senderName": "Ji-won Kim", "content": "이번 주 금요일 모임 장소 정했어요!", "createdAt": "2026-08-04T10:00:00" } ],
+  "meta": { "nextCursor": null, "hasNext": false, "size": 1 },
+  "error": null
+}
+```
+
+에러 응답: `POST`와 동일 (`404 CLUB_NOT_FOUND`, `400 NOT_CLUB_MEMBER`).
+
 ---
 
 ## 5. 정보 (생활정보/꿀팁)
@@ -598,7 +639,8 @@
   "error": null
 }
 ```
-클럽 그룹 채팅(여러 멤버가 있는 방)은 이 API로 안 나온다 — 아직 미구현(`api.md` 4번 섹션 갭).
+클럽 그룹 채팅(여러 멤버가 있는 방)은 이 `chats/threads` API로 안 나온다 — `club` 도메인의
+`GET /clubs/{clubId}/messages`로 별도 구현됨(4번 섹션 참고).
 
 ### `GET /chats/threads/{threadId}/messages?cursor=&limit=`
 

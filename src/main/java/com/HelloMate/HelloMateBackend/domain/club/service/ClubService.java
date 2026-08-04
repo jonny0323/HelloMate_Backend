@@ -3,18 +3,25 @@ package com.HelloMate.HelloMateBackend.domain.club.service;
 import com.HelloMate.HelloMateBackend.domain.club.dto.request.CreateClubRequest;
 import com.HelloMate.HelloMateBackend.domain.club.dto.request.UpdateClubRequest;
 import com.HelloMate.HelloMateBackend.domain.club.dto.response.ClubMemberResponse;
+import com.HelloMate.HelloMateBackend.domain.club.dto.response.ClubMessageResponse;
 import com.HelloMate.HelloMateBackend.domain.club.dto.response.ClubResponse;
 import com.HelloMate.HelloMateBackend.domain.club.entity.Club;
 import com.HelloMate.HelloMateBackend.domain.club.entity.ClubMember;
+import com.HelloMate.HelloMateBackend.domain.club.entity.ClubMessage;
 import com.HelloMate.HelloMateBackend.domain.club.repository.ClubMemberRepository;
+import com.HelloMate.HelloMateBackend.domain.club.repository.ClubMessageRepository;
 import com.HelloMate.HelloMateBackend.domain.club.repository.ClubRepository;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
 import com.HelloMate.HelloMateBackend.domain.student.service.StudentService;
 import com.HelloMate.HelloMateBackend.global.common.exception.BusinessException;
 import com.HelloMate.HelloMateBackend.global.common.exception.ErrorCode;
+import com.HelloMate.HelloMateBackend.global.common.response.CursorMeta;
+import com.HelloMate.HelloMateBackend.global.common.util.CursorPageUtil;
 import com.HelloMate.HelloMateBackend.global.common.util.UuidCreator;
 import com.HelloMate.HelloMateBackend.global.security.AuthPrincipal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +35,7 @@ public class ClubService {
 
     private final ClubRepository clubRepository;
     private final ClubMemberRepository clubMemberRepository;
+    private final ClubMessageRepository clubMessageRepository;
     private final StudentService studentService;
 
     public List<ClubResponse> getClubs(String studentId, String status) {
@@ -115,6 +123,33 @@ public class ClubService {
                 .toList();
     }
 
+    @Transactional
+    public ClubMessageResponse sendMessage(String studentId, String clubId, String content) {
+        Club club = getClub(clubId);
+        requireMember(club, studentId);
+        Student sender = studentService.getStudent(studentId);
+        ClubMessage message = new ClubMessage(UuidCreator.create(), club, sender, content);
+        clubMessageRepository.save(message);
+        return ClubMessageResponse.from(message);
+    }
+
+    public Slice<ClubMessage> getMessageSlice(String studentId, String clubId, String cursor, int limit) {
+        Club club = getClub(clubId);
+        requireMember(club, studentId);
+        return clubMessageRepository.findByClubIdOrderByCreatedAtDesc(clubId, CursorPageUtil.decode(cursor), PageRequest.of(0, limit));
+    }
+
+    public List<ClubMessageResponse> toMessageList(Slice<ClubMessage> slice) {
+        return slice.getContent().stream().map(ClubMessageResponse::from).toList();
+    }
+
+    public CursorMeta messageCursorMetaOf(Slice<ClubMessage> slice) {
+        String nextCursor = slice.hasNext() && !slice.getContent().isEmpty()
+                ? CursorPageUtil.encode(slice.getContent().get(slice.getContent().size() - 1).getCreatedAt())
+                : null;
+        return new CursorMeta(nextCursor, slice.hasNext(), slice.getContent().size());
+    }
+
     private Club getClub(String clubId) {
         return clubRepository.findById(clubId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CLUB_NOT_FOUND));
@@ -123,6 +158,12 @@ public class ClubService {
     private void requireCreator(Club club, String studentId) {
         if (!club.getCreator().getId().equals(studentId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private void requireMember(Club club, String studentId) {
+        if (!clubMemberRepository.existsByClubIdAndStudentId(club.getId(), studentId)) {
+            throw new BusinessException(ErrorCode.NOT_CLUB_MEMBER);
         }
     }
 }
