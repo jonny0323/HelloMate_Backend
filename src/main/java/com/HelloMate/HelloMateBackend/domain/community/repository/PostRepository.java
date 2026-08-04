@@ -16,4 +16,10 @@ public interface PostRepository extends JpaRepository<Post, String> {
     Slice<Post> findByUniversityIdOrderByCreatedAtDesc(@Param("universityId") String universityId,
                                                         @Param("cursor") LocalDateTime cursor,
                                                         Pageable pageable);
+
+    @Query("select p from Post p where p.author.id = :authorId "
+            + "and (:cursor is null or p.createdAt < :cursor) order by p.createdAt desc")
+    Slice<Post> findByAuthorIdOrderByCreatedAtDesc(@Param("authorId") String authorId,
+                                                    @Param("cursor") LocalDateTime cursor,
+                                                    Pageable pageable);
 }

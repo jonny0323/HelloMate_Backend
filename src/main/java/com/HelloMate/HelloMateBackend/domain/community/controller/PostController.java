@@ -54,6 +54,14 @@ public class PostController {
         return ApiResponse.ok(postService.createPost(principal.id(), request));
     }
 
+    @GetMapping("/mine")
+    public ApiResponse<List<PostSummaryResponse>> getMyPosts(@CurrentUser AuthPrincipal principal,
+                                                              @RequestParam(required = false) String cursor,
+                                                              @RequestParam(defaultValue = "20") int limit) {
+        Slice<Post> slice = postService.getMyPostSlice(principal.id(), cursor, limit);
+        return ApiResponse.ok(postService.toSummaryList(slice), postService.cursorMetaOf(slice));
+    }
+
     @GetMapping("/{postId}")
     public ApiResponse<PostDetailResponse> getPostDetail(@CurrentUser AuthPrincipal principal,
                                                           @PathVariable String postId,

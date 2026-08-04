@@ -735,6 +735,13 @@
 `anonName`은 게시글마다 매번 랜덤 배정되는 게 아니라 같은 게시글/댓글 스레드 안에서 같은 작성자에게 고정된
 별명이다(`PostAnonService`).
 
+### `GET /posts/mine?cursor=&limit=`
+
+본인이 작성한 게시글만. 응답 형태는 `GET /posts`와 동일(`PostSummaryResponse[]` + 커서 `meta`). 클럽
+게시물은 다루지 않는다 — 클럽에는 "글" 개념이 없고 멤버십/그룹 채팅만 있음.
+
+에러 응답: 별도 없음(본인 목록 조회라 404 대상 없음).
+
 ### `POST /posts`
 
 요청 — 어떤 언어로 작성해도 됨(서버가 `originalLang`을 자동 감지).
@@ -858,6 +865,37 @@
 성공 응답 `201`: `data: null`.
 
 에러 응답: `404 POST_NOT_FOUND` (게시글 신고), `404 COMMENT_NOT_FOUND` (댓글 신고).
+
+### `GET /comments/mine?cursor=&limit=`
+
+본인이 작성한 댓글 목록. `/posts/{postId}/comments`와 달리 최상위 리소스라 별도 컨트롤러
+(`CommentController`)에 있다.
+
+성공 응답 `200`
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "cmt_01h...",
+      "postId": "post_01h...",
+      "parentCommentId": null,
+      "anonName": "익명 3",
+      "content": "작년에는 시험 기간에 밤 11시까지 했어요.",
+      "originalLang": "ko",
+      "likeCount": 0,
+      "createdAt": "2026-08-03T22:00:00"
+    }
+  ],
+  "meta": { "nextCursor": null, "hasNext": false, "size": 1 },
+  "error": null
+}
+```
+어느 게시글의 댓글인지 알아야 프론트가 이동할 수 있어서 `postId`가 포함된다(상세 조회용
+`PostCommentResponse`와 다른 별도 DTO). `translated`/`likedByMe`는 없음(내 활동 목록이라 번역/좋아요
+상태까지는 안 내려줌).
+
+에러 응답: 별도 없음.
 
 ---
 

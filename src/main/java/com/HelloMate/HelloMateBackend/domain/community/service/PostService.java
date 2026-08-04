@@ -3,6 +3,7 @@ package com.HelloMate.HelloMateBackend.domain.community.service;
 import com.HelloMate.HelloMateBackend.domain.community.dto.request.CreateCommentRequest;
 import com.HelloMate.HelloMateBackend.domain.community.dto.request.CreatePostRequest;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.CreatePostResponse;
+import com.HelloMate.HelloMateBackend.domain.community.dto.response.MyCommentResponse;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.PostCommentResponse;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.PostDetailResponse;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.PostSummaryResponse;
@@ -74,6 +75,36 @@ public class PostService {
     }
 
     public CursorMeta cursorMetaOf(Slice<Post> slice) {
+        String nextCursor = slice.hasNext() && !slice.getContent().isEmpty()
+                ? CursorPageUtil.encode(slice.getContent().get(slice.getContent().size() - 1).getCreatedAt())
+                : null;
+        return new CursorMeta(nextCursor, slice.hasNext(), slice.getContent().size());
+    }
+
+    public Slice<Post> getMyPostSlice(String studentId, String cursor, int limit) {
+        return postRepository.findByAuthorIdOrderByCreatedAtDesc(studentId, CursorPageUtil.decode(cursor), PageRequest.of(0, limit));
+    }
+
+    public Slice<PostComment> getMyCommentSlice(String studentId, String cursor, int limit) {
+        return postCommentRepository.findByAuthorIdOrderByCreatedAtDesc(studentId, CursorPageUtil.decode(cursor), PageRequest.of(0, limit));
+    }
+
+    @Transactional
+    public List<MyCommentResponse> toMyCommentList(Slice<PostComment> slice) {
+        return slice.getContent().stream()
+                .map(comment -> new MyCommentResponse(
+                        comment.getId(),
+                        comment.getPost().getId(),
+                        comment.getParentComment() == null ? null : comment.getParentComment().getId(),
+                        postAnonService.getOrAssignAnonName(comment.getPost(), comment.getAuthor()),
+                        comment.getContent(),
+                        comment.getOriginalLang(),
+                        comment.getLikeCount(),
+                        comment.getCreatedAt()))
+                .toList();
+    }
+
+    public CursorMeta commentCursorMetaOf(Slice<PostComment> slice) {
         String nextCursor = slice.hasNext() && !slice.getContent().isEmpty()
                 ? CursorPageUtil.encode(slice.getContent().get(slice.getContent().size() - 1).getCreatedAt())
                 : null;
