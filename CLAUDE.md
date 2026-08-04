@@ -78,8 +78,9 @@ DTO 리턴하지 마라. JSON은 snake_case로 나간다(Jackson 전역 설정) 
 - `docs/reports/` — 작업 끝난 뒤 보고서
 - `docs/resources/` — 커밋 컨벤션, 코드 컨벤션 등 작업할 때 참고하는 자료 (예: `conventions.md`)
 
-파일명은 작업 단위로: `docs/roadmaps/{도메인 또는 기능}.md`, `docs/reports/{도메인 또는 기능}.md`.
-같은 이름이면 로드맵-보고서가 짝이 맞아서 나중에 찾기 쉽다.
+파일명은 `yyyy-mm-dd-제목.md` 형식으로, 작업 시작일 기준으로 붙인다(예:
+`docs/roadmaps/2026-08-04-community-search.md`, `docs/reports/2026-08-04-community-search.md`).
+로드맵과 보고서는 날짜-제목이 동일해야 짝이 맞아서 나중에 찾기 쉽다. 문서 내용은 전부 한글로 쓴다.
 
 ## 작업 순서
 
