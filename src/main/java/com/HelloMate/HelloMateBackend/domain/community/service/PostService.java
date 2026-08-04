@@ -64,10 +64,10 @@ public class PostService {
         return new CreatePostResponse(post.getId(), anonName, post.getCreatedAt());
     }
 
-    public Slice<Post> getPostSlice(String studentId, String cursor, int limit) {
+    public Slice<Post> getPostSlice(String studentId, String keyword, String cursor, int limit) {
         Student student = studentService.getStudent(studentId);
         return postRepository.findByUniversityIdOrderByCreatedAtDesc(student.getUniversity().getId(),
-                CursorPageUtil.decode(cursor), PageRequest.of(0, limit));
+                keyword, CursorPageUtil.decode(cursor), PageRequest.of(0, limit));
     }
 
     @Transactional

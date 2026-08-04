@@ -859,7 +859,9 @@
 
 ## 8. 커뮤니티
 
-### `GET /posts?cursor=&limit=`
+### `GET /posts?q=&cursor=&limit=`
+
+`q`는 제목+본문 부분일치 검색(자유게시판 상단 검색창). `/posts/mine`(작성자 필터)에는 없음.
 
 성공 응답 `200`
 ```json
@@ -1077,8 +1079,10 @@
 
 ## 남은 갭
 
-- 마이페이지 "이름/국적/출생연도 수정" — `StudentProfileUpdateRequest`는 `language`/`major`/`grade`만
-  받는다(7번 섹션 참고).
-- 서비스 이용약관 전체보기 API(`GET /terms/service`) — 현재 없음, 필요하면 정적 페이지/앱 내
-  하드코딩으로 대체 가능.
-- 커뮤니티 게시글 검색(`GET /posts?q=`) — 9번 섹션의 통합 검색은 공지/생활정보만 다룸.
+기획 확인 결과 지금 단계에서는 보류하기로 한 것들.
+
+- 서류 인증 문서 유형 구분(`documentType`: 학생증/재학증명서/입학허가서/성적증명서) — 지금
+  `SubmitVerificationDocumentRequest`는 파일만 받고 어떤 서류인지 구분하지 않는다. 보류.
+- 생활정보(꿀팁) 구조화 필드(`fee`/`estimatedDuration`/`externalLink`/`documentTags`) — 지금
+  `HoneyTip.content`는 단일 텍스트라 프론트가 마크다운 등으로 파싱해야 한다. 보류.
+- 서비스 이용약관 전체보기 API(`GET /terms/service`) — 정적 페이지/앱 내 하드코딩으로 대체. 보류.

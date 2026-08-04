@@ -41,9 +41,10 @@ public class PostController {
 
     @GetMapping
     public ApiResponse<List<PostSummaryResponse>> getPosts(@CurrentUser AuthPrincipal principal,
+                                                            @RequestParam(required = false) String q,
                                                             @RequestParam(required = false) String cursor,
                                                             @RequestParam(defaultValue = "20") int limit) {
-        Slice<Post> slice = postService.getPostSlice(principal.id(), cursor, limit);
+        Slice<Post> slice = postService.getPostSlice(principal.id(), q, cursor, limit);
         return ApiResponse.ok(postService.toSummaryList(slice), postService.cursorMetaOf(slice));
     }
 

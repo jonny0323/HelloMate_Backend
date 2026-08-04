@@ -12,8 +12,10 @@ import java.time.LocalDateTime;
 public interface PostRepository extends JpaRepository<Post, String> {
 
     @Query("select p from Post p where p.university.id = :universityId "
+            + "and (:keyword is null or p.title like %:keyword% or p.content like %:keyword%) "
             + "and (:cursor is null or p.createdAt < :cursor) order by p.createdAt desc")
     Slice<Post> findByUniversityIdOrderByCreatedAtDesc(@Param("universityId") String universityId,
+                                                        @Param("keyword") String keyword,
                                                         @Param("cursor") LocalDateTime cursor,
                                                         Pageable pageable);
 
