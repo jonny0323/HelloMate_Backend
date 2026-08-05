@@ -1,0 +1,248 @@
+### notification domain — NotificationController (/notifications/**)
+### 알림 피드에 쌓을 실제 알림이 필요해서, 클럽 참여 시 개설자에게 알림이 가는 것(ClubService.join)을
+### 이용해 알림을 만들어낸다.
+
+### 1. 클럽 개설자 A 회원가입 + 로그인
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}a",
+  "email": "qa{{runId}}a@inu.ac.kr",
+  "name": "QA Notif Creator",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 A 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 2.
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}a", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 A 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenA", response.body.data.access_token);
+%}
+
+### 3. 클럽 참여자 B, C 회원가입 + 로그인
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}b",
+  "email": "qa{{runId}}b@inu.ac.kr",
+  "name": "QA Notif Joiner B",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 B 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 4.
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}b", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 B 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenB", response.body.data.access_token);
+%}
+
+### 5.
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}c",
+  "email": "qa{{runId}}c@inu.ac.kr",
+  "name": "QA Notif Joiner C",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 C 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 6.
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}c", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 C 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenC", response.body.data.access_token);
+%}
+
+### 7. A - 클럽 생성
+POST {{host}}/clubs
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "title": "QA 알림용 클럽 {{runId}}", "introduction": "알림 테스트용", "max_members": 10, "deadline": "2099-12-31" }
+
+> {%
+client.test("클럽 생성 201", function () { client.assert(response.status === 201); });
+client.global.set("clubId", response.body.data.id);
+%}
+
+### 8. B가 참여 -> A에게 CLUB 알림 발생
+POST {{host}}/clubs/{{clubId}}/join
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("B 참여 200", function () { client.assert(response.status === 200); });
+%}
+
+### 9. C가 참여 -> A에게 CLUB 알림 하나 더 발생
+POST {{host}}/clubs/{{clubId}}/join
+Authorization: Bearer {{tokenC}}
+
+> {%
+client.test("C 참여 200", function () { client.assert(response.status === 200); });
+%}
+
+### 10. A - 알림 피드 조회 (category=club)
+GET {{host}}/notifications?category=club
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("club 카테고리 알림 2개 이상, 링크 정보 정확", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.length >= 2, "expected at least 2 club notifications, got " + response.body.data.length);
+    const first = response.body.data[0];
+    client.assert(first.category === "club", "category should be club");
+    client.assert(first.link_type === "club", "link_type should be club");
+    client.assert(first.link_id === "{{clubId}}", "link_id should point to the club");
+    client.assert(first.read === false, "should start unread");
+});
+client.global.set("notificationId", response.body.data[0].id);
+%}
+
+### 11. A - 알림 피드 조회 (카테고리 없음, 전체)
+GET {{host}}/notifications
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("전체 알림 목록에도 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (n) { return n.id === "{{notificationId}}"; });
+    client.assert(found, "notification should appear in the unfiltered feed");
+});
+%}
+
+### 12. A - 안읽은 알림 수
+GET {{host}}/notifications/unread-count
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("안읽은 알림 2개 이상", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.count >= 2, "expected at least 2 unread, got " + response.body.data.count);
+});
+%}
+
+### 13. A - 알림 1개 읽음 처리
+PATCH {{host}}/notifications/{{notificationId}}/read
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("알림 읽음 처리 200", function () { client.assert(response.status === 200); });
+%}
+
+### 14. A - 존재하지 않는 알림 읽음 처리 -> 404 NOTIFICATION_NOT_FOUND
+PATCH {{host}}/notifications/notification-does-not-exist-{{runId}}/read
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("존재하지 않는 알림 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "NOTIFICATION_NOT_FOUND", "expected NOTIFICATION_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 15. A - 모두 읽음 처리
+PATCH {{host}}/notifications/read-all
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("모두 읽음 처리 후 안읽은 수 0", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.count === 0, "expected 0 unread after read-all, got " + response.body.data.count);
+});
+%}
+
+### 16. A - 알림 설정 조회 (기본값: 전부 활성화, system은 필수)
+GET {{host}}/notifications/settings
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("알림 설정 기본값 7개, system은 required", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.length === 7, "expected 7 settings, got " + response.body.data.length);
+    response.body.data.forEach(function (s) {
+        client.assert(s.enabled === true, "all settings should default to enabled");
+    });
+    const system = response.body.data.filter(function (s) { return s.category === "system"; })[0];
+    client.assert(system.required === true, "system category should be required");
+});
+%}
+
+### 17. A - 알림 설정 변경 (community, honey_tip 끄기)
+PATCH {{host}}/notifications/settings
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "settings": [ { "category": "community", "enabled": false }, { "category": "honey_tip", "enabled": false } ] }
+
+> {%
+client.test("설정 변경 반영", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const community = response.body.data.filter(function (s) { return s.category === "community"; })[0];
+    const honeyTip = response.body.data.filter(function (s) { return s.category === "honey_tip"; })[0];
+    client.assert(community.enabled === false, "community should now be disabled");
+    client.assert(honeyTip.enabled === false, "honey_tip should now be disabled");
+});
+%}
+
+### 18. A - 필수 알림(system) 끄기 시도 -> 400 INVALID_INPUT
+PATCH {{host}}/notifications/settings
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "settings": [ { "category": "system", "enabled": false } ] }
+
+> {%
+client.test("system 끄기 시도 400 INVALID_INPUT", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INPUT", "expected INVALID_INPUT, got " + response.body.error.code);
+});
+%}

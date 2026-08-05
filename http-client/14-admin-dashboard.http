@@ -1,0 +1,141 @@
+### admin dashboard domain — AdminDashboardController (/admin/dashboard)
+### 사전 준비: seed-invite-codes.sql (초대 코드 HTTP-TEST-DASHBOARD)
+### 참고: recent_notices는 대학 전체 공지 중 최신 4개라(이 파일이 만드는 공지만 보장되지 않음) 배열
+### 형태만 검증하고, unanswered_threads는 이 담당자(staffId) 개인 스코프라 확정적으로 검증 가능하다.
+
+### 1. 담당자 회원가입 + 로그인
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "HTTP-TEST-DASHBOARD",
+  "email": "dashstaff{{runId}}@inu.ac.kr",
+  "name": "QA Dashboard Staff",
+  "position": "주임",
+  "password": "qaStaffPass1234"
+}
+
+> {%
+client.test("담당자 가입 201", function () { client.assert(response.status === 201); });
+client.global.set("staffId", response.body.data.id);
+%}
+
+### 2.
+POST {{host}}/auth/staff/login
+Content-Type: application/json
+
+{ "email": "dashstaff{{runId}}@inu.ac.kr", "password": "qaStaffPass1234" }
+
+> {%
+client.test("담당자 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("staffAccessToken", response.body.data.access_token);
+%}
+
+### 3. 학생 회원가입 + 로그인
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}dh",
+  "email": "qa{{runId}}dh@inu.ac.kr",
+  "name": "QA Dashboard Student",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 4.
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}dh", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("studentAccessToken", response.body.data.access_token);
+%}
+
+### 5. 학생이 이 담당자에게 문의 시작 (담당자는 아직 확인 안 함 -> 미답변 스레드)
+POST {{host}}/chats/threads
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "teacher_id": "{{staffId}}", "message": "대시보드 테스트용 문의입니다." }
+
+> {%
+client.test("문의 스레드 생성 201", function () { client.assert(response.status === 201); });
+%}
+
+### 6. 담당자 대시보드 조회
+GET {{host}}/admin/dashboard
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("대시보드 조회 200 - 미답변 스레드에 방금 문의 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(Array.isArray(response.body.data.recent_notices), "recent_notices should be an array");
+    client.assert(Array.isArray(response.body.data.unanswered_threads), "unanswered_threads should be an array");
+
+    const thread = response.body.data.unanswered_threads.filter(function (t) { return t.student_id !== undefined && t.last_message === "대시보드 테스트용 문의입니다."; })[0];
+    client.assert(thread !== undefined, "unanswered thread from the student should be present");
+    client.assert(thread.student_name === "QA Dashboard Student", "student_name should match");
+});
+%}
+
+### 7. 담당자 스레드 목록에서 threadId 조회 (답변하기 위해 필요)
+GET {{host}}/chats/threads
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("담당자 스레드 목록 조회 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+});
+const target = response.body.data.filter(function (t) { return t.last_message === "대시보드 테스트용 문의입니다."; })[0];
+client.assert(target !== undefined, "thread from step 5 should be in the staff's thread list");
+client.global.set("dashboardThreadId", target.thread_id);
+%}
+
+### 8. 담당자 답변 전송 (읽음 처리 겸함)
+POST {{host}}/chats/threads/{{dashboardThreadId}}/messages
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "content": "확인했습니다, 답변드려요." }
+
+> {%
+client.test("담당자 답변 전송 201", function () { client.assert(response.status === 201); });
+%}
+
+### 9. 답변 후 대시보드 재조회 - 미답변 목록에서 제외됨
+GET {{host}}/admin/dashboard
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("답변 후 미답변 목록에서 제외", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const stillThere = response.body.data.unanswered_threads.some(function (t) { return t.last_message === "대시보드 테스트용 문의입니다."; });
+    client.assert(!stillThere, "answered thread should no longer appear as unanswered");
+});
+%}
+
+### 10. 토큰 없이 대시보드 접근 -> 401 UNAUTHORIZED
+GET {{host}}/admin/dashboard
+
+> {%
+client.test("토큰 없이 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "UNAUTHORIZED", "expected UNAUTHORIZED, got " + response.body.error.code);
+});
+%}

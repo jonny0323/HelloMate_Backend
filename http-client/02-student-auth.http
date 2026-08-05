@@ -1,0 +1,379 @@
+### student auth domain — StudentAuthController (/auth/students/**, 전부 permitAll)
+### 알려진 한계: 이메일 인증 코드는 StubEmailService가 서버 로그에만 남기고 조회 API가 없어서,
+### "정확한 코드로 성공"하는 해피패스는 자동 검증할 수 없다. 코드 발송 성공 / 틀린 코드 에러까지만 검증한다.
+
+### 1. 회원가입 성공 (runId로 매 실행마다 유니크한 login_id/email 생성)
+< {%
+    const runId = Date.now();
+    request.variables.set("runId", runId);
+    client.global.set("runId", runId);
+    client.global.set("studentLoginId", "qa" + runId);
+    client.global.set("studentEmail", "qa" + runId + "@inu.ac.kr");
+    client.global.set("studentPassword", "qaPass1234");
+%}
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "{{studentLoginId}}",
+  "email": "{{studentEmail}}",
+  "name": "QA Student",
+  "password": "{{studentPassword}}",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "major": "컴퓨터공학부",
+  "grade": "1학년",
+  "birth_year": 2001,
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("회원가입 성공 201", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.success === true, "success should be true");
+    client.assert(typeof response.body.data.id === "string" && response.body.data.id.length > 0, "data.id should be present");
+    client.assert(response.body.data.name === "QA Student", "name should echo back");
+});
+client.global.set("studentId", response.body.data.id);
+%}
+
+### 2. 회원가입 - login_id 중복 -> 409 DUPLICATE_LOGIN_ID
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "{{studentLoginId}}",
+  "email": "qa{{runId}}dup@inu.ac.kr",
+  "name": "QA Student Dup",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("login_id 중복 409", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "DUPLICATE_LOGIN_ID", "expected DUPLICATE_LOGIN_ID, got " + response.body.error.code);
+});
+%}
+
+### 3. 회원가입 - email 중복 -> 409 DUPLICATE_ACCOUNT
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}dup2",
+  "email": "{{studentEmail}}",
+  "name": "QA Student Dup2",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("email 중복 409", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "DUPLICATE_ACCOUNT", "expected DUPLICATE_ACCOUNT, got " + response.body.error.code);
+});
+%}
+
+### 4. 회원가입 - 비밀번호 형식 위반(숫자 없음) -> 400 INVALID_INPUT
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}bad",
+  "email": "qa{{runId}}bad@inu.ac.kr",
+  "name": "QA Student Bad",
+  "password": "onlyletters",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("비밀번호 형식 위반 400 INVALID_INPUT", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INPUT", "expected INVALID_INPUT, got " + response.body.error.code);
+});
+%}
+
+### 5. 회원가입 - 존재하지 않는 university_id -> 400 INVALID_INPUT
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}uni",
+  "email": "qa{{runId}}uni@inu.ac.kr",
+  "name": "QA Student Uni",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-does-not-exist",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("존재하지 않는 학교 400 INVALID_INPUT", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INPUT", "expected INVALID_INPUT, got " + response.body.error.code);
+});
+%}
+
+### 6. 아이디 중복 확인 - 사용 가능
+POST {{host}}/auth/students/check-login-id
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}avail" }
+
+> {%
+client.test("사용 가능한 아이디 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.available === true, "available should be true");
+});
+%}
+
+### 7. 아이디 중복 확인 - 이미 사용 중 -> 409 DUPLICATE_LOGIN_ID
+POST {{host}}/auth/students/check-login-id
+Content-Type: application/json
+
+{ "login_id": "{{studentLoginId}}" }
+
+> {%
+client.test("이미 사용 중인 아이디 409", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "DUPLICATE_LOGIN_ID", "expected DUPLICATE_LOGIN_ID, got " + response.body.error.code);
+});
+%}
+
+### 8. 이메일 중복 확인 - 사용 가능
+POST {{host}}/auth/students/check-email
+Content-Type: application/json
+
+{ "email": "qa{{runId}}avail@inu.ac.kr" }
+
+> {%
+client.test("사용 가능한 이메일 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.available === true, "available should be true");
+});
+%}
+
+### 9. 이메일 중복 확인 - 이미 가입됨 -> 409 DUPLICATE_ACCOUNT
+POST {{host}}/auth/students/check-email
+Content-Type: application/json
+
+{ "email": "{{studentEmail}}" }
+
+> {%
+client.test("이미 가입된 이메일 409", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "DUPLICATE_ACCOUNT", "expected DUPLICATE_ACCOUNT, got " + response.body.error.code);
+});
+%}
+
+### 10. 가입 이메일 인증코드 발송 - 학교 이메일이라 성공
+POST {{host}}/auth/students/email-verifications
+Content-Type: application/json
+
+{ "email": "{{studentEmail}}" }
+
+> {%
+client.test("학교 이메일 인증코드 발송 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.success === true, "success should be true");
+});
+%}
+
+### 11. 가입 이메일 인증코드 발송 - 학교 이메일 아님 -> 400 INVALID_INPUT
+POST {{host}}/auth/students/email-verifications
+Content-Type: application/json
+
+{ "email": "qa{{runId}}@gmail.com" }
+
+> {%
+client.test("비학교 이메일 400 INVALID_INPUT", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INPUT", "expected INVALID_INPUT, got " + response.body.error.code);
+});
+%}
+
+### 12. 가입 이메일 인증코드 확인 - 틀린 코드 -> 400 INVALID_VERIFICATION_CODE
+### (알려진 한계: 실제 코드는 서버 로그에만 있어 해피패스는 자동화 불가 — 오류 경로만 검증)
+POST {{host}}/auth/students/email-verifications/confirm
+Content-Type: application/json
+
+{ "email": "{{studentEmail}}", "code": "000000" }
+
+> {%
+client.test("틀린 인증코드 400 INVALID_VERIFICATION_CODE", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_VERIFICATION_CODE", "expected INVALID_VERIFICATION_CODE, got " + response.body.error.code);
+});
+%}
+
+### 13. 로그인 성공
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{
+  "login_id": "{{studentLoginId}}",
+  "password": "{{studentPassword}}",
+  "auto_login": false
+}
+
+> {%
+client.test("로그인 성공 200 + 토큰 발급", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(typeof response.body.data.access_token === "string" && response.body.data.access_token.length > 0, "access_token should be present");
+    client.assert(typeof response.body.data.refresh_token === "string" && response.body.data.refresh_token.length > 0, "refresh_token should be present");
+});
+client.global.set("studentAccessToken", response.body.data.access_token);
+client.global.set("studentRefreshToken", response.body.data.refresh_token);
+%}
+
+### 14. 로그인 - 비밀번호 틀림 -> 401 INVALID_CREDENTIALS
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "{{studentLoginId}}", "password": "wrongPassword1", "auto_login": false }
+
+> {%
+client.test("비밀번호 틀림 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_CREDENTIALS", "expected INVALID_CREDENTIALS, got " + response.body.error.code);
+});
+%}
+
+### 15. 로그인 - 존재하지 않는 아이디 -> 401 INVALID_CREDENTIALS (계정 존재 여부 구분 안 함)
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}nosuch", "password": "wrongPassword1", "auto_login": false }
+
+> {%
+client.test("존재하지 않는 아이디도 401 동일 메시지", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_CREDENTIALS", "expected INVALID_CREDENTIALS, got " + response.body.error.code);
+});
+%}
+
+### 16. 리프레시 토큰 재발급 성공
+POST {{host}}/auth/students/refresh
+Content-Type: application/json
+
+{ "refresh_token": "{{studentRefreshToken}}" }
+
+> {%
+client.test("리프레시 성공 200 + 새 토큰", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(typeof response.body.data.access_token === "string" && response.body.data.access_token.length > 0, "access_token should be present");
+    client.assert(response.body.data.refresh_token !== "{{studentRefreshToken}}", "refresh token should rotate");
+});
+%}
+
+### 17. 리프레시 - 형식 자체가 잘못된 토큰 -> 401 INVALID_REFRESH_TOKEN
+POST {{host}}/auth/students/refresh
+Content-Type: application/json
+
+{ "refresh_token": "not-a-real-jwt" }
+
+> {%
+client.test("잘못된 형식 토큰 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_REFRESH_TOKEN", "expected INVALID_REFRESH_TOKEN, got " + response.body.error.code);
+});
+%}
+
+### 18. 리프레시 - access 토큰으로 시도 -> 401 INVALID_REFRESH_TOKEN (type 클레임 불일치)
+POST {{host}}/auth/students/refresh
+Content-Type: application/json
+
+{ "refresh_token": "{{studentAccessToken}}" }
+
+> {%
+client.test("access 토큰으로 refresh 시도 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_REFRESH_TOKEN", "expected INVALID_REFRESH_TOKEN, got " + response.body.error.code);
+});
+%}
+
+### 19. 로그아웃 성공
+POST {{host}}/auth/students/logout
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("로그아웃 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.success === true, "success should be true");
+    client.assert(response.body.data === null || response.body.data === undefined, "data should be null/absent (Jackson non_null omits it from JSON)");
+});
+%}
+
+### 20. 비밀번호 재설정 코드 발송 - 존재하지 않는 이메일 -> 404 STUDENT_NOT_FOUND
+POST {{host}}/auth/students/password-reset/email
+Content-Type: application/json
+
+{ "email": "qa{{runId}}nosuch@inu.ac.kr" }
+
+> {%
+client.test("존재하지 않는 이메일 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "STUDENT_NOT_FOUND", "expected STUDENT_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 21. 비밀번호 재설정 코드 발송 - 가입된 이메일 -> 200 성공
+POST {{host}}/auth/students/password-reset/email
+Content-Type: application/json
+
+{ "email": "{{studentEmail}}" }
+
+> {%
+client.test("가입된 이메일로 재설정 코드 발송 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.success === true, "success should be true");
+});
+%}
+
+### 22. 비밀번호 재설정 코드 확인 - 틀린 코드 -> 400 INVALID_VERIFICATION_CODE
+POST {{host}}/auth/students/password-reset/verify
+Content-Type: application/json
+
+{ "email": "{{studentEmail}}", "code": "000000" }
+
+> {%
+client.test("틀린 재설정 코드 400", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_VERIFICATION_CODE", "expected INVALID_VERIFICATION_CODE, got " + response.body.error.code);
+});
+%}
+
+### 23. 비밀번호 재설정 - 잘못된/만료된 resetToken -> 401 INVALID_RESET_TOKEN
+PATCH {{host}}/auth/students/password-reset
+Content-Type: application/json
+
+{ "reset_token": "not-a-real-reset-token", "new_password": "newPass1234" }
+
+> {%
+client.test("잘못된 resetToken 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_RESET_TOKEN", "expected INVALID_RESET_TOKEN, got " + response.body.error.code);
+});
+%}

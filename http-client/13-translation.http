@@ -1,0 +1,98 @@
+### translation domain — TranslationController (/translations/**)
+### 스텁 구현(StubTranslationService): 원문에 "[target_lang] " 접두어를 붙여 반환한다.
+
+### 1. 테스트 학생 회원가입 + 로그인 (STUDENT/STAFF 아무 토큰이나 접근 가능)
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}tr",
+  "email": "qa{{runId}}tr@inu.ac.kr",
+  "name": "QA Translation Student",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 2.
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}tr", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("studentAccessToken", response.body.data.access_token);
+%}
+
+### 3. 일반 번역 - 한국어 원문 감지 + [target_lang] 접두어 스텁 번역
+POST {{host}}/translations
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "text": "안녕하세요", "target_lang": "en" }
+
+> {%
+client.test("스텁 번역 결과 형식 확인", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.translated_text === "[en] 안녕하세요", "expected stub prefix, got " + response.body.data.translated_text);
+    client.assert(response.body.data.detected_source_lang === "ko", "expected ko detected, got " + response.body.data.detected_source_lang);
+    client.assert(response.body.data.model === "stub-nllb-200-distilled", "unexpected model name");
+});
+%}
+
+### 4. 토큰 없이 번역 요청 -> 401 UNAUTHORIZED
+POST {{host}}/translations
+Content-Type: application/json
+
+{ "text": "안녕하세요", "target_lang": "en" }
+
+> {%
+client.test("토큰 없이 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "UNAUTHORIZED", "expected UNAUTHORIZED, got " + response.body.error.code);
+});
+%}
+
+### 5. 공식(official) 번역 - 일반 언어는 confidence 0.92, 검수 불필요
+POST {{host}}/translations/official
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "text": "Hello there", "target_lang": "ko" }
+
+> {%
+client.test("일반 언어 공식 번역 confidence=0.92", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.needs_human_review === false, "needs_human_review should be false for ko");
+    client.assert(response.body.data.confidence === 0.92, "expected 0.92, got " + response.body.data.confidence);
+    client.assert(response.body.data.model === "stub-nllb-200-1.3B", "unexpected model name");
+});
+%}
+
+### 6. 공식(official) 번역 - 몽골어(mn)는 저자원 언어라 검수 필요, confidence 0.71
+POST {{host}}/translations/official
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "text": "Hello there", "target_lang": "mn" }
+
+> {%
+client.test("몽골어 공식 번역 검수 필요, confidence=0.71", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.needs_human_review === true, "needs_human_review should be true for mn");
+    client.assert(response.body.data.confidence === 0.71, "expected 0.71, got " + response.body.data.confidence);
+});
+%}

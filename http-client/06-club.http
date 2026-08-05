@@ -1,0 +1,427 @@
+### club domain — ClubController (/clubs/**)
+
+### 1. 클럽장이 될 학생 A 회원가입
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}a",
+  "email": "qa{{runId}}a@inu.ac.kr",
+  "name": "QA Club Creator",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 A 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 2. 학생 A 로그인
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}a", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 A 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenA", response.body.data.access_token);
+%}
+
+### 3. 참여할 학생 B 회원가입
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}b",
+  "email": "qa{{runId}}b@inu.ac.kr",
+  "name": "QA Club Joiner",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 B 가입 201", function () { client.assert(response.status === 201); });
+client.global.set("studentBId", response.body.data.id);
+%}
+
+### 4. 학생 B 로그인
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}b", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 B 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenB", response.body.data.access_token);
+%}
+
+### 5. 방관자 학생 C 회원가입 (멤버 아님 확인용)
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}c",
+  "email": "qa{{runId}}c@inu.ac.kr",
+  "name": "QA Club Bystander",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 C 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 6. 학생 C 로그인
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}c", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 C 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenC", response.body.data.access_token);
+%}
+
+### 7. 학생 A - 클럽 생성
+POST {{host}}/clubs
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "title": "QA 클럽 {{runId}}", "introduction": "테스트용 클럽입니다.", "max_members": 10, "deadline": "2099-12-31" }
+
+> {%
+client.test("클럽 생성 201 - 생성자 자동 참여", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.current_members === 1, "creator should auto-join, current_members=1");
+    client.assert(response.body.data.card_state === "joined", "card_state should be joined for the creator");
+    client.assert(response.body.data.full === false, "should not be full yet");
+});
+client.global.set("clubId", response.body.data.id);
+%}
+
+### 8. 클럽 생성 - 과거 마감일 -> 400 INVALID_INPUT
+POST {{host}}/clubs
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "title": "과거 마감 클럽", "introduction": "실패해야 함", "max_members": 5, "deadline": "2020-01-01" }
+
+> {%
+client.test("과거 마감일 400 INVALID_INPUT", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INPUT", "expected INVALID_INPUT, got " + response.body.error.code);
+});
+%}
+
+### 9. 클럽 목록 조회 (A) - 방금 만든 클럽 포함
+GET {{host}}/clubs
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("클럽 목록에 방금 만든 클럽 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (c) { return c.id === "{{clubId}}"; });
+    client.assert(found, "created club should appear in list");
+});
+%}
+
+### 10. 내 클럽 목록 조회 (A)
+GET {{host}}/clubs/mine
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("내 클럽 목록에 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (c) { return c.id === "{{clubId}}"; });
+    client.assert(found, "created club should appear in /clubs/mine");
+});
+%}
+
+### 11. 클럽 상세 조회 (B, 아직 미참여) - card_state=joinable
+GET {{host}}/clubs/{{clubId}}
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("미참여 학생에게는 joinable로 보임", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.card_state === "joinable", "expected joinable, got " + response.body.data.card_state);
+});
+%}
+
+### 12. 클럽 상세 조회 - 존재하지 않는 클럽 -> 404 CLUB_NOT_FOUND
+GET {{host}}/clubs/club-does-not-exist-{{runId}}
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("존재하지 않는 클럽 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "CLUB_NOT_FOUND", "expected CLUB_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 13. 클럽 수정 - 개설자가 아닌 학생이 시도 -> 403 FORBIDDEN
+PATCH {{host}}/clubs/{{clubId}}
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "introduction": "해킹 시도" }
+
+> {%
+client.test("비개설자 수정 시도 403", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}
+
+### 14. 클럽 수정 - 개설자 (A) 성공
+PATCH {{host}}/clubs/{{clubId}}
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "introduction": "수정된 소개입니다." }
+
+> {%
+client.test("개설자 수정 200 반영", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.introduction === "수정된 소개입니다.", "introduction should be updated");
+});
+%}
+
+### 15. 클럽 참여 (B)
+POST {{host}}/clubs/{{clubId}}/join
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("B 클럽 참여 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+});
+%}
+
+### 16. 클럽 참여 - 이미 참여 중 -> 409 ALREADY_CLUB_MEMBER
+POST {{host}}/clubs/{{clubId}}/join
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("중복 참여 409", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "ALREADY_CLUB_MEMBER", "expected ALREADY_CLUB_MEMBER, got " + response.body.error.code);
+});
+%}
+
+### 17. 클럽 참여 - 존재하지 않는 클럽 -> 404 CLUB_NOT_FOUND
+POST {{host}}/clubs/club-does-not-exist-{{runId}}/join
+Authorization: Bearer {{tokenC}}
+
+> {%
+client.test("존재하지 않는 클럽 참여 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "CLUB_NOT_FOUND", "expected CLUB_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 18. 멤버 목록 조회 (B, 개설자 아닌 멤버 — 현재 구현은 멤버라면 누구나 조회 가능)
+GET {{host}}/clubs/{{clubId}}/members
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("멤버라면 개설자가 아니어도 멤버 목록 조회 가능", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.length === 2, "expected 2 members (A, B), got " + response.body.data.length);
+});
+%}
+
+### 19. 멤버 목록 조회 - 멤버가 아닌 학생 C -> 400 NOT_CLUB_MEMBER
+GET {{host}}/clubs/{{clubId}}/members
+Authorization: Bearer {{tokenC}}
+
+> {%
+client.test("비멤버는 멤버 목록 조회 불가 400", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "NOT_CLUB_MEMBER", "expected NOT_CLUB_MEMBER, got " + response.body.error.code);
+});
+%}
+
+### 20. 클럽 그룹 채팅 메시지 전송 (B)
+POST {{host}}/clubs/{{clubId}}/messages
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "content": "안녕하세요! B입니다." }
+
+> {%
+client.test("메시지 전송 201", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.content === "안녕하세요! B입니다.", "content should echo back");
+    client.assert(response.body.data.sender_id === "{{studentBId}}", "sender_id should be B");
+});
+%}
+
+### 21. 클럽 그룹 채팅 메시지 전송 - 비멤버(C) -> 400 NOT_CLUB_MEMBER
+POST {{host}}/clubs/{{clubId}}/messages
+Authorization: Bearer {{tokenC}}
+Content-Type: application/json
+
+{ "content": "저는 멤버가 아닌데요" }
+
+> {%
+client.test("비멤버 메시지 전송 400", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "NOT_CLUB_MEMBER", "expected NOT_CLUB_MEMBER, got " + response.body.error.code);
+});
+%}
+
+### 22. 클럽 그룹 채팅 메시지 목록 조회 (A)
+GET {{host}}/clubs/{{clubId}}/messages
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("메시지 목록에 B의 메시지 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (m) { return m.content === "안녕하세요! B입니다."; });
+    client.assert(found, "B's message should appear in the list");
+    client.assert(response.body.meta.size >= 1, "meta.size should be at least 1");
+});
+%}
+
+### 23. 클럽장 위임 - 대상이 멤버가 아님 (C) -> 400 NOT_CLUB_MEMBER
+< {%
+    request.variables.set("studentCId", "placeholder");
+%}
+PATCH {{host}}/clubs/{{clubId}}/owner
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "new_creator_id": "student-not-a-member-{{runId}}" }
+
+> {%
+client.test("비멤버에게 위임 시도 400 NOT_CLUB_MEMBER", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "NOT_CLUB_MEMBER", "expected NOT_CLUB_MEMBER, got " + response.body.error.code);
+});
+%}
+
+### 24. 클럽장 위임 - A가 B에게 위임
+PATCH {{host}}/clubs/{{clubId}}/owner
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "new_creator_id": "{{studentBId}}" }
+
+> {%
+client.test("클럽장 위임 200 - creator_id가 B로 변경", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.creator_id === "{{studentBId}}", "creator_id should now be B");
+});
+%}
+
+### 25. 클럽장 위임 - 더 이상 개설자가 아닌 A가 재시도 -> 403 FORBIDDEN
+PATCH {{host}}/clubs/{{clubId}}/owner
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "new_creator_id": "{{studentBId}}" }
+
+> {%
+client.test("전 개설자의 위임 재시도 403", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}
+
+### 26. 클럽 나가기 - A는 이제 일반 멤버라 나갈 수 있음
+DELETE {{host}}/clubs/{{clubId}}/leave
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("일반 멤버가 된 A는 나갈 수 있음 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+});
+%}
+
+### 27. 클럽 나가기 - 이미 나간 A가 재시도 -> 400 NOT_CLUB_MEMBER
+DELETE {{host}}/clubs/{{clubId}}/leave
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("이미 나간 멤버 재시도 400", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "NOT_CLUB_MEMBER", "expected NOT_CLUB_MEMBER, got " + response.body.error.code);
+});
+%}
+
+### 28. 클럽 나가기 - 새 클럽장 B가 시도 -> 400 CLUB_OWNER_CANNOT_LEAVE
+DELETE {{host}}/clubs/{{clubId}}/leave
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("클럽장은 나갈 수 없음 400 CLUB_OWNER_CANNOT_LEAVE", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "CLUB_OWNER_CANNOT_LEAVE", "expected CLUB_OWNER_CANNOT_LEAVE, got " + response.body.error.code);
+});
+%}
+
+### 29. 정원 1명 클럽 생성 (정원 초과 테스트용) - A가 생성, 즉시 정원참
+POST {{host}}/clubs
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "title": "정원1 클럽 {{runId}}", "introduction": "정원 테스트", "max_members": 1, "deadline": "2099-12-31" }
+
+> {%
+client.test("정원 1명 클럽 생성 201, 이미 가득 참", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.full === true, "should already be full with 1/1 members");
+});
+client.global.set("fullClubId", response.body.data.id);
+%}
+
+### 30. 정원 초과 클럽 참여 시도 (C) -> 409 CLUB_FULL
+POST {{host}}/clubs/{{fullClubId}}/join
+Authorization: Bearer {{tokenC}}
+
+> {%
+client.test("정원 초과 클럽 참여 409 CLUB_FULL", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "CLUB_FULL", "expected CLUB_FULL, got " + response.body.error.code);
+});
+%}
+
+### 31. 클럽 삭제 - 현재 개설자 B
+DELETE {{host}}/clubs/{{clubId}}
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("클럽 삭제 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+});
+%}
+
+### 32. 삭제된 클럽 조회 -> 404 CLUB_NOT_FOUND
+GET {{host}}/clubs/{{clubId}}
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("삭제된 클럽 조회 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "CLUB_NOT_FOUND", "expected CLUB_NOT_FOUND, got " + response.body.error.code);
+});
+%}

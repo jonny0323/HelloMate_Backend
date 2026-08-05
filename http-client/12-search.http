@@ -1,0 +1,146 @@
+### search domain — SearchController (/search, 공지+생활정보 통합 검색)
+### 사전 준비: seed-invite-codes.sql (초대 코드 HTTP-TEST-SEARCH)
+
+### 1. 담당자(작성자) 회원가입 + 로그인
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "HTTP-TEST-SEARCH",
+  "email": "searchstaff{{runId}}@inu.ac.kr",
+  "name": "QA Search Staff",
+  "position": "주임",
+  "password": "qaStaffPass1234"
+}
+
+> {%
+client.test("담당자 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 2.
+POST {{host}}/auth/staff/login
+Content-Type: application/json
+
+{ "email": "searchstaff{{runId}}@inu.ac.kr", "password": "qaStaffPass1234" }
+
+> {%
+client.test("담당자 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("staffAccessToken", response.body.data.access_token);
+%}
+
+### 3. 학생 회원가입 + 로그인
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}se",
+  "email": "qa{{runId}}se@inu.ac.kr",
+  "name": "QA Search Student",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 4.
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}se", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("studentAccessToken", response.body.data.access_token);
+%}
+
+### 5. 검색 대상 정보글(꿀팁) 생성
+POST {{host}}/admin/honey-tips
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "category": "QA검색", "title": "QASearchTip{{runId}}", "content": "검색 테스트용 정보글" }
+
+> {%
+client.test("정보글 생성 201", function () { client.assert(response.status === 201); });
+client.global.set("honeyTipId", response.body.data.id);
+%}
+
+### 6. 검색 대상 공지 생성
+POST {{host}}/admin/notices
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{
+  "title": "QASearchNotice{{runId}}",
+  "content": "검색 테스트용 공지",
+  "department": "QA검색부서",
+  "type": "normal",
+  "audience": { "mode": "all" }
+}
+
+> {%
+client.test("공지 생성 201", function () { client.assert(response.status === 201); });
+client.global.set("noticeId", response.body.data.id);
+%}
+
+### 7. 통합 검색 - 정보글 제목으로 검색 (기본 types=notice,honey_tip)
+GET {{host}}/search?q=QASearchTip{{runId}}
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("정보글이 검색 결과에 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const target = response.body.data.results.filter(function (r) { return r.id === "{{honeyTipId}}"; })[0];
+    client.assert(target !== undefined, "honey tip should appear in search results");
+    client.assert(target.type === "honey_tip", "type should be honey_tip");
+    client.assert(target.category === "QA검색", "category should match");
+});
+%}
+
+### 8. 통합 검색 - 공지 제목으로 검색
+GET {{host}}/search?q=QASearchNotice{{runId}}
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("공지가 검색 결과에 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const target = response.body.data.results.filter(function (r) { return r.id === "{{noticeId}}"; })[0];
+    client.assert(target !== undefined, "notice should appear in search results");
+    client.assert(target.type === "notice", "type should be notice");
+    client.assert(target.department === "QA검색부서", "department should match");
+});
+%}
+
+### 9. 통합 검색 - types=notice로만 필터링하면 정보글은 안 나옴
+GET {{host}}/search?q=QASearchTip{{runId}}&types=notice
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("types=notice 필터링 시 정보글 제외", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.results.some(function (r) { return r.id === "{{honeyTipId}}"; });
+    client.assert(!found, "honey tip should be excluded when types=notice");
+});
+%}
+
+### 10. 통합 검색 - 아무 결과도 없는 검색어
+GET {{host}}/search?q=zzz존재하지않는검색어{{runId}}
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("결과 없는 검색어는 빈 배열", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.results.length === 0, "expected no results, got " + response.body.data.results.length);
+});
+%}

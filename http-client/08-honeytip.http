@@ -1,0 +1,226 @@
+### honey-tip domain — HoneyTipController (/honey-tips/**, 학생) + AdminHoneyTipController (/admin/honey-tips/**, 담당자)
+### 사전 준비: seed-invite-codes.sql (초대 코드 HTTP-TEST-HONEYTIP-ADMIN)
+
+### 1. 담당자(작성자) 회원가입
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "HTTP-TEST-HONEYTIP-ADMIN",
+  "email": "honeytipstaff{{runId}}@inu.ac.kr",
+  "name": "QA HoneyTip Staff",
+  "position": "주임",
+  "password": "qaStaffPass1234"
+}
+
+> {%
+client.test("담당자 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 2. 담당자 로그인
+POST {{host}}/auth/staff/login
+Content-Type: application/json
+
+{ "email": "honeytipstaff{{runId}}@inu.ac.kr", "password": "qaStaffPass1234" }
+
+> {%
+client.test("담당자 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("staffAccessToken", response.body.data.access_token);
+%}
+
+### 3. 학생 회원가입
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}ht",
+  "email": "qa{{runId}}ht@inu.ac.kr",
+  "name": "QA HoneyTip Student",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 4. 학생 로그인
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}ht", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("studentAccessToken", response.body.data.access_token);
+%}
+
+### 5. 담당자 - 정보글(꿀팁) 작성
+POST {{host}}/admin/honey-tips
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{
+  "category": "QA카테고리{{runId}}",
+  "title": "QA 꿀팁 {{runId}}",
+  "content": "테스트용 정보글 본문입니다.",
+  "tip_message": "이렇게 하면 편해요.",
+  "steps": [
+    { "order": 1, "title": "1단계", "description": "서류를 준비하세요.", "tags": ["서류"] },
+    { "order": 2, "title": "2단계", "description": "접수처를 방문하세요.", "tags": ["방문"] }
+  ],
+  "estimated_fee": "무료",
+  "processing_period": "3일",
+  "external_link": "https://example.com/guide"
+}
+
+> {%
+client.test("정보글 작성 201 - 면책 문구 포함, 조회수 0", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.view_count === 0, "view_count should start at 0");
+    client.assert(typeof response.body.data.disclaimer === "string" && response.body.data.disclaimer.length > 0, "disclaimer should be present");
+    client.assert(response.body.data.steps.length === 2, "steps should have 2 entries");
+});
+client.global.set("honeyTipId", response.body.data.id);
+%}
+
+### 6. 학생 - 카테고리로 정보글 목록 조회
+GET {{host}}/honey-tips?category=QA카테고리{{runId}}
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("카테고리 목록에 방금 작성한 정보글 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (t) { return t.id === "{{honeyTipId}}"; });
+    client.assert(found, "created honey tip should appear in category list");
+});
+%}
+
+### 7. 학생 - 정보글 상세 조회 (조회수 1 증가)
+GET {{host}}/honey-tips/{{honeyTipId}}
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("상세 조회 200 - 조회수 1", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.view_count === 1, "view_count should be 1 after first detail view");
+});
+%}
+
+### 8. 정보글 상세 조회 - 존재하지 않는 id -> 404 HONEY_TIP_NOT_FOUND
+GET {{host}}/honey-tips/tip-does-not-exist-{{runId}}
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("존재하지 않는 정보글 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "HONEY_TIP_NOT_FOUND", "expected HONEY_TIP_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 9. 담당자 - 정보글 수정
+PATCH {{host}}/admin/honey-tips/{{honeyTipId}}
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "title": "QA 꿀팁 {{runId}} (수정됨)", "estimated_fee": "5000원" }
+
+> {%
+client.test("정보글 수정 200 반영", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.title === "QA 꿀팁 {{runId}} (수정됨)", "title should be updated");
+    client.assert(response.body.data.estimated_fee === "5000원", "estimated_fee should be updated");
+});
+%}
+
+### 10. 담당자 - 존재하지 않는 정보글 수정 -> 404 HONEY_TIP_NOT_FOUND
+PATCH {{host}}/admin/honey-tips/tip-does-not-exist-{{runId}}
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "title": "실패해야 함" }
+
+> {%
+client.test("존재하지 않는 정보글 수정 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "HONEY_TIP_NOT_FOUND", "expected HONEY_TIP_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 11. 학생 - 정보 수정 요청 보내기
+POST {{host}}/honey-tips/{{honeyTipId}}/edit-requests
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "content": "수수료가 실제로는 다른 것 같아요, 확인 부탁드려요." }
+
+> {%
+client.test("수정 요청 제출 201", function () { client.assert(response.status === 201); });
+%}
+
+### 12. 정보 수정 요청 - 존재하지 않는 정보글 -> 404 HONEY_TIP_NOT_FOUND
+POST {{host}}/honey-tips/tip-does-not-exist-{{runId}}/edit-requests
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "content": "실패해야 함" }
+
+> {%
+client.test("존재하지 않는 정보글에 수정 요청 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "HONEY_TIP_NOT_FOUND", "expected HONEY_TIP_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 13. 담당자 - 수정 요청 목록 조회
+GET {{host}}/admin/honey-tips/{{honeyTipId}}/edit-requests
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("수정 요청 목록에 방금 제출한 것 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.length >= 1, "expected at least 1 edit request");
+    const target = response.body.data.filter(function (r) { return r.content.indexOf("수수료가 실제로는") === 0; })[0];
+    client.assert(target !== undefined, "submitted edit request should be present");
+    client.assert(target.status === "pending", "expected pending, got " + target.status);
+    client.assert(target.requester_name === "QA HoneyTip Student", "requester_name should match the student");
+});
+client.global.set("editRequestId", response.body.data.filter(function (r) { return r.content.indexOf("수수료가 실제로는") === 0; })[0].id);
+%}
+
+### 14. 담당자 - 수정 요청 승인 처리
+PATCH {{host}}/admin/honey-tips/edit-requests/{{editRequestId}}
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "status": "approved" }
+
+> {%
+client.test("수정 요청 승인 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.status === "approved", "expected approved, got " + response.body.data.status);
+});
+%}
+
+### 15. 담당자 - 존재하지 않는 수정 요청 승인 -> 404 HONEY_TIP_EDIT_REQUEST_NOT_FOUND
+PATCH {{host}}/admin/honey-tips/edit-requests/edit-request-does-not-exist-{{runId}}
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "status": "approved" }
+
+> {%
+client.test("존재하지 않는 수정 요청 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "HONEY_TIP_EDIT_REQUEST_NOT_FOUND", "expected HONEY_TIP_EDIT_REQUEST_NOT_FOUND, got " + response.body.error.code);
+});
+%}

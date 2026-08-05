@@ -1,0 +1,130 @@
+### admin student directory domain — AdminStudentController (/admin/students/**)
+### 사전 준비: seed-invite-codes.sql (초대 코드 HTTP-TEST-STUDENTS)
+
+### 1. 담당자 회원가입 + 로그인
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "HTTP-TEST-STUDENTS",
+  "email": "dirstaff{{runId}}@inu.ac.kr",
+  "name": "QA Directory Staff",
+  "position": "주임",
+  "password": "qaStaffPass1234"
+}
+
+> {%
+client.test("담당자 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 2.
+POST {{host}}/auth/staff/login
+Content-Type: application/json
+
+{ "email": "dirstaff{{runId}}@inu.ac.kr", "password": "qaStaffPass1234" }
+
+> {%
+client.test("담당자 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("staffAccessToken", response.body.data.access_token);
+%}
+
+### 3. 검색 대상 학생 회원가입
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}dr",
+  "email": "qa{{runId}}dr@inu.ac.kr",
+  "name": "QA Directory Student {{runId}}",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "major": "컴퓨터공학부",
+  "grade": "1학년",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 가입 201", function () { client.assert(response.status === 201); });
+client.global.set("targetStudentId", response.body.data.id);
+%}
+
+### 4. 담당자 - 이름 키워드로 학생 검색
+GET {{host}}/admin/students?keyword=QA Directory Student {{runId}}&page=1&size=20
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("키워드 검색으로 학생 발견", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const target = response.body.data.filter(function (s) { return s.id === "{{targetStudentId}}"; })[0];
+    client.assert(target !== undefined, "student should be found by name keyword");
+    client.assert(target.student_type === "정규과정생", "student_type should serialize as Korean label");
+    client.assert(target.major === "컴퓨터공학부", "major should match");
+    client.assert(response.body.meta.total >= 1, "meta.total should be at least 1");
+});
+%}
+
+### 5. 담당자 - 전공 필터로 검색
+GET {{host}}/admin/students?major=컴퓨터공학부&keyword=QA Directory Student {{runId}}
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("전공 필터로도 학생 발견", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (s) { return s.id === "{{targetStudentId}}"; });
+    client.assert(found, "student should be found by major filter");
+});
+%}
+
+### 6. 담당자 - 학생 상세 조회
+GET {{host}}/admin/students/{{targetStudentId}}
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("학생 상세 조회 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.id === "{{targetStudentId}}", "id should match");
+    client.assert(response.body.data.name === "QA Directory Student {{runId}}", "name should match");
+    client.assert(response.body.data.university_name === "인천대학교", "university_name should be 인천대학교");
+});
+%}
+
+### 7. 담당자 - 존재하지 않는 학생 상세 조회 -> 404 STUDENT_NOT_FOUND
+GET {{host}}/admin/students/student-does-not-exist-{{runId}}
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("존재하지 않는 학생 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "STUDENT_NOT_FOUND", "expected STUDENT_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 8. 학생 토큰으로 /admin/students 접근 -> 403 FORBIDDEN
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}dr", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("검색 대상 학생 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("studentAccessToken", response.body.data.access_token);
+%}
+
+### 9.
+GET {{host}}/admin/students
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("STUDENT 토큰으로 /admin/students 접근 403 FORBIDDEN", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}

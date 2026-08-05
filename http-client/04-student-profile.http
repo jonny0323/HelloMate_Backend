@@ -1,0 +1,140 @@
+### student mypage domain — StudentController (/students/me/**)
+### 알려진 한계: 비밀번호 변경은 이메일 인증코드가 필요한데 코드를 로그로만 볼 수 있어
+### 해피패스는 자동화 불가 — 틀린 코드 에러 경로만 검증한다.
+
+### 1. 테스트 학생 회원가입
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+    client.global.set("studentLoginId", "qa" + runId);
+    client.global.set("studentEmail", "qa" + runId + "@inu.ac.kr");
+    client.global.set("studentPassword", "qaPass1234");
+%}
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "{{studentLoginId}}",
+  "email": "{{studentEmail}}",
+  "name": "QA Profile",
+  "password": "{{studentPassword}}",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "major": "컴퓨터공학부",
+  "grade": "1학년",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("회원가입 201", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+});
+client.global.set("studentId", response.body.data.id);
+%}
+
+### 2. 로그인
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "{{studentLoginId}}", "password": "{{studentPassword}}", "auto_login": false }
+
+> {%
+client.test("로그인 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+});
+client.global.set("studentAccessToken", response.body.data.access_token);
+%}
+
+### 3. 내 프로필 조회
+GET {{host}}/students/me
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("내 프로필 조회 200 - 가입 시 입력값과 일치", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.id === "{{studentId}}", "id should match");
+    client.assert(response.body.data.login_id === "{{studentLoginId}}", "login_id should match");
+    client.assert(response.body.data.email === "{{studentEmail}}", "email should match");
+    client.assert(response.body.data.name === "QA Profile", "name should match");
+    client.assert(response.body.data.student_type === "정규과정생", "student_type should serialize as Korean label");
+    client.assert(response.body.data.university_name === "인천대학교", "university_name should be 인천대학교");
+    client.assert(response.body.data.verification_status === "registered", "new account should start as registered");
+    client.assert(response.body.data.verified === false, "verified should be false before verification");
+    client.assert(response.body.data.birth_year === null || response.body.data.birth_year === undefined, "birth_year not set at signup should be null");
+});
+%}
+
+### 4. 내 프로필 조회 - 토큰 없음 -> 401 UNAUTHORIZED
+GET {{host}}/students/me
+
+> {%
+client.test("토큰 없이 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "UNAUTHORIZED", "expected UNAUTHORIZED, got " + response.body.error.code);
+});
+%}
+
+### 5. 내 프로필 수정 (이름/국적/출생연도/학년)
+PATCH {{host}}/students/me
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{
+  "name": "QA Profile Updated",
+  "country": "US",
+  "birth_year": 1999,
+  "grade": "2학년"
+}
+
+> {%
+client.test("프로필 수정 반영 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.name === "QA Profile Updated", "name should be updated");
+    client.assert(response.body.data.country === "US", "country should be updated");
+    client.assert(response.body.data.birth_year === 1999, "birth_year should be updated");
+    client.assert(response.body.data.grade === "2학년", "grade should be updated");
+    client.assert(response.body.data.major === "컴퓨터공학부", "major should be untouched (not sent in this request)");
+});
+%}
+
+### 6. 비밀번호 변경 - 틀린 인증코드 -> 400 INVALID_VERIFICATION_CODE
+PATCH {{host}}/students/me/password
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "code": "000000", "new_password": "newQaPass1234" }
+
+> {%
+client.test("틀린 인증코드로 비밀번호 변경 시도 400", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_VERIFICATION_CODE", "expected INVALID_VERIFICATION_CODE, got " + response.body.error.code);
+});
+%}
+
+### 7. 회원 탈퇴
+DELETE {{host}}/students/me
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("회원 탈퇴 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.success === true, "success should be true");
+    client.assert(response.body.data === null || response.body.data === undefined, "data should be null/absent (Jackson non_null omits it from JSON)");
+});
+%}
+
+### 8. 탈퇴한 계정으로 로그인 시도 -> 403 ACCOUNT_WITHDRAWN
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "{{studentLoginId}}", "password": "{{studentPassword}}", "auto_login": false }
+
+> {%
+client.test("탈퇴한 계정 로그인 403 ACCOUNT_WITHDRAWN", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "ACCOUNT_WITHDRAWN", "expected ACCOUNT_WITHDRAWN, got " + response.body.error.code);
+});
+%}

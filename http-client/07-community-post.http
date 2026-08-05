@@ -1,0 +1,444 @@
+### community domain — PostController (/posts/**) + CommentController (/comments/mine)
+
+### 1. 학생 A 회원가입
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}a",
+  "email": "qa{{runId}}a@inu.ac.kr",
+  "name": "QA Post Author",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 A 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 2. 학생 A 로그인
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}a", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 A 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenA", response.body.data.access_token);
+%}
+
+### 3. 학생 B 회원가입
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}b",
+  "email": "qa{{runId}}b@inu.ac.kr",
+  "name": "QA Post Reader",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 B 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 4. 학생 B 로그인
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}b", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 B 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenB", response.body.data.access_token);
+%}
+
+### 5. 게시글 작성 (A, 익명)
+POST {{host}}/posts
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "title": "QA 게시글 {{runId}}", "content": "테스트용 게시글 본문입니다.", "anonymous": true }
+
+> {%
+client.test("게시글 작성 201, 익명 처리", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.anonymous === true, "anonymous should be true");
+    client.assert(response.body.data.author_name.indexOf("익명") === 0, "author_name should start with 익명");
+});
+client.global.set("postId", response.body.data.id);
+%}
+
+### 6. 게시글 목록 검색 (q로 방금 쓴 글 찾기)
+GET {{host}}/posts?q=QA 게시글 {{runId}}
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("검색어로 방금 쓴 글을 찾음", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (p) { return p.id === "{{postId}}"; });
+    client.assert(found, "created post should appear in search results");
+});
+%}
+
+### 7. 내가 쓴 글 목록 (A)
+GET {{host}}/posts/mine
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("내 글 목록에 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (p) { return p.id === "{{postId}}"; });
+    client.assert(found, "created post should appear in /posts/mine");
+});
+%}
+
+### 8. 게시글 상세 조회 (B) - mine=false
+GET {{host}}/posts/{{postId}}
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("타인이 보면 mine=false", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.mine === false, "mine should be false for B");
+    client.assert(response.body.data.liked_by_me === false, "liked_by_me should be false initially");
+    client.assert(response.body.data.comment_count === 0, "comment_count should start at 0");
+});
+%}
+
+### 9. 게시글 상세 조회 (A) - mine=true
+GET {{host}}/posts/{{postId}}
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("작성자가 보면 mine=true", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.mine === true, "mine should be true for author A");
+});
+%}
+
+### 10. 게시글 수정 - 작성자가 아닌 B가 시도 -> 403 FORBIDDEN
+PATCH {{host}}/posts/{{postId}}
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "title": "해킹 시도", "content": "해킹 시도 본문" }
+
+> {%
+client.test("비작성자 수정 시도 403", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}
+
+### 11. 게시글 수정 - 작성자 A 성공
+PATCH {{host}}/posts/{{postId}}
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "title": "QA 게시글 {{runId}} (수정됨)", "content": "수정된 본문입니다." }
+
+> {%
+client.test("작성자 수정 200 반영", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.content === "수정된 본문입니다.", "content should be updated");
+});
+%}
+
+### 12. 게시글 좋아요 (B)
+POST {{host}}/posts/{{postId}}/like
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("좋아요 200", function () { client.assert(response.status === 200); });
+%}
+
+### 13. 게시글 좋아요 - 중복 -> 409 ALREADY_LIKED
+POST {{host}}/posts/{{postId}}/like
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("중복 좋아요 409", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "ALREADY_LIKED", "expected ALREADY_LIKED, got " + response.body.error.code);
+});
+%}
+
+### 14. 게시글 좋아요 취소 (B)
+DELETE {{host}}/posts/{{postId}}/like
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("좋아요 취소 200", function () { client.assert(response.status === 200); });
+%}
+
+### 15. 게시글 좋아요 취소 - 이미 취소됨 -> 400 NOT_LIKED_YET
+DELETE {{host}}/posts/{{postId}}/like
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("좋아요 안 누른 상태에서 취소 400", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "NOT_LIKED_YET", "expected NOT_LIKED_YET, got " + response.body.error.code);
+});
+%}
+
+### 16. 댓글 작성 (B)
+POST {{host}}/posts/{{postId}}/comments
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "content": "B의 댓글입니다." }
+
+> {%
+client.test("댓글 작성 201", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.anon_name.indexOf("익명") === 0, "anon_name should start with 익명");
+});
+client.global.set("commentId", response.body.data.id);
+%}
+
+### 17. 대댓글 작성 (A, parent=B의 댓글)
+POST {{host}}/posts/{{postId}}/comments
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "content": "A의 대댓글입니다.", "parent_comment_id": "{{commentId}}" }
+
+> {%
+client.test("대댓글 작성 201", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.parent_comment_id === "{{commentId}}", "parent_comment_id should match");
+});
+client.global.set("replyId", response.body.data.id);
+%}
+
+### 18. 대댓글의 대댓글 시도 -> 400 REPLY_DEPTH_EXCEEDED
+POST {{host}}/posts/{{postId}}/comments
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "content": "대댓글의 대댓글", "parent_comment_id": "{{replyId}}" }
+
+> {%
+client.test("대댓글에 대댓글 시도 400 REPLY_DEPTH_EXCEEDED", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "REPLY_DEPTH_EXCEEDED", "expected REPLY_DEPTH_EXCEEDED, got " + response.body.error.code);
+});
+%}
+
+### 19. 댓글 작성 - 존재하지 않는 parent_comment_id -> 404 COMMENT_NOT_FOUND
+POST {{host}}/posts/{{postId}}/comments
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "content": "부모가 없는 댓글", "parent_comment_id": "comment-does-not-exist-{{runId}}" }
+
+> {%
+client.test("존재하지 않는 부모 댓글 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "COMMENT_NOT_FOUND", "expected COMMENT_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 20. 댓글 목록 조회 - 방금 단 댓글/대댓글 포함
+GET {{host}}/posts/{{postId}}/comments
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("댓글 목록에 2개 이상 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const ids = response.body.data.map(function (c) { return c.id; });
+    client.assert(ids.indexOf("{{commentId}}") !== -1, "top comment should be present");
+    client.assert(ids.indexOf("{{replyId}}") !== -1, "reply should be present");
+});
+%}
+
+### 21. 댓글 좋아요 (A가 B의 댓글에)
+POST {{host}}/posts/{{postId}}/comments/{{commentId}}/like
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("댓글 좋아요 200", function () { client.assert(response.status === 200); });
+%}
+
+### 22. 댓글 좋아요 - 중복 -> 409 ALREADY_LIKED
+POST {{host}}/posts/{{postId}}/comments/{{commentId}}/like
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("댓글 중복 좋아요 409", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "ALREADY_LIKED", "expected ALREADY_LIKED, got " + response.body.error.code);
+});
+%}
+
+### 23. 댓글 좋아요 취소
+DELETE {{host}}/posts/{{postId}}/comments/{{commentId}}/like
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("댓글 좋아요 취소 200", function () { client.assert(response.status === 200); });
+%}
+
+### 24. 댓글 좋아요 취소 - 이미 취소됨 -> 400 NOT_LIKED_YET
+DELETE {{host}}/posts/{{postId}}/comments/{{commentId}}/like
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("댓글 좋아요 재취소 400", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "NOT_LIKED_YET", "expected NOT_LIKED_YET, got " + response.body.error.code);
+});
+%}
+
+### 25. 댓글 삭제 - 작성자가 아닌 A가 B의 댓글 삭제 시도 -> 403 FORBIDDEN
+DELETE {{host}}/posts/{{postId}}/comments/{{commentId}}
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("비작성자 댓글 삭제 403", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}
+
+### 26. 댓글 삭제 - 존재하지 않는 댓글 -> 404 COMMENT_NOT_FOUND
+DELETE {{host}}/posts/{{postId}}/comments/comment-does-not-exist-{{runId}}
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("존재하지 않는 댓글 삭제 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "COMMENT_NOT_FOUND", "expected COMMENT_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 27. 게시글 신고 (B)
+POST {{host}}/posts/{{postId}}/report
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "reason": "광고성 게시글입니다." }
+
+> {%
+client.test("게시글 신고 201", function () { client.assert(response.status === 201); });
+%}
+
+### 28. 댓글 신고 (B가 A의 대댓글을)
+POST {{host}}/posts/{{postId}}/comments/{{replyId}}/report
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "reason": "부적절한 댓글입니다." }
+
+> {%
+client.test("댓글 신고 201", function () { client.assert(response.status === 201); });
+%}
+
+### 29. 게시글 신고 - 존재하지 않는 게시글 -> 404 POST_NOT_FOUND
+POST {{host}}/posts/post-does-not-exist-{{runId}}/report
+Authorization: Bearer {{tokenB}}
+Content-Type: application/json
+
+{ "reason": "아무 이유" }
+
+> {%
+client.test("존재하지 않는 게시글 신고 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "POST_NOT_FOUND", "expected POST_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 30. 내가 쓴 댓글 목록 (A) - 대댓글 포함
+GET {{host}}/comments/mine
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("내 댓글 목록에 대댓글 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.some(function (c) { return c.id === "{{replyId}}"; });
+    client.assert(found, "reply comment should appear in /comments/mine for A");
+});
+%}
+
+### 31. 댓글 삭제 - 작성자 B 성공
+DELETE {{host}}/posts/{{postId}}/comments/{{commentId}}
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("작성자 댓글 삭제 200", function () { client.assert(response.status === 200); });
+%}
+
+### 32. 게시글 삭제 - 작성자가 아닌 B가 시도 -> 403 FORBIDDEN
+DELETE {{host}}/posts/{{postId}}
+Authorization: Bearer {{tokenB}}
+
+> {%
+client.test("비작성자 게시글 삭제 403", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}
+
+### 33. 게시글 삭제 - 작성자 A 성공
+DELETE {{host}}/posts/{{postId}}
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("작성자 게시글 삭제 200", function () { client.assert(response.status === 200); });
+%}
+
+### 34. 삭제된 게시글 조회 -> 404 POST_NOT_FOUND
+GET {{host}}/posts/{{postId}}
+Authorization: Bearer {{tokenA}}
+
+> {%
+client.test("삭제된 게시글 조회 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "POST_NOT_FOUND", "expected POST_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 35. 게시글 작성 - 제목 누락 -> 400 INVALID_INPUT
+POST {{host}}/posts
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "title": "", "content": "제목이 없어요", "anonymous": true }
+
+> {%
+client.test("제목 누락 400 INVALID_INPUT", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INPUT", "expected INVALID_INPUT, got " + response.body.error.code);
+});
+%}
+
+### 36. 존재하지 않는 게시글에 댓글 작성 -> 404 POST_NOT_FOUND
+POST {{host}}/posts/post-does-not-exist-{{runId}}/comments
+Authorization: Bearer {{tokenA}}
+Content-Type: application/json
+
+{ "content": "존재하지 않는 글에 댓글" }
+
+> {%
+client.test("존재하지 않는 게시글에 댓글 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "POST_NOT_FOUND", "expected POST_NOT_FOUND, got " + response.body.error.code);
+});
+%}

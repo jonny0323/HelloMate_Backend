@@ -1,0 +1,244 @@
+### staff auth domain — StaffAuthController (/auth/staff/**, permitAll) + StaffController (/admin/staff/me)
+### 사전 준비: http-client/seed-invite-codes.sql 를 로컬 Postgres에 미리 실행해야 한다
+### (초대 코드 HTTP-TEST-STAFFAUTH). 이 파일의 2번 요청이 그 코드를 소모하므로,
+### 다시 돌리려면 시드를 재실행해야 한다.
+
+### 1. 담당자 회원가입 성공 (초대 코드 소모)
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+    client.global.set("staffEmail", "staffauth" + runId + "@inu.ac.kr");
+    client.global.set("staffPassword", "qaStaffPass1234");
+%}
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "HTTP-TEST-STAFFAUTH",
+  "email": "{{staffEmail}}",
+  "name": "QA Staff",
+  "position": "주임",
+  "password": "{{staffPassword}}"
+}
+
+> {%
+client.test("담당자 회원가입 성공 201, verified=false", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.success === true, "success should be true");
+    client.assert(typeof response.body.data.id === "string" && response.body.data.id.length > 0, "data.id should be present");
+    client.assert(response.body.data.name === "QA Staff", "name should echo back");
+    client.assert(response.body.data.verified === false, "new staff account should start unverified");
+});
+client.global.set("staffId", response.body.data.id);
+%}
+
+### 2. 담당자 회원가입 - 이미 사용된 초대 코드 재사용 -> 400 INVALID_INVITE_CODE
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "HTTP-TEST-STAFFAUTH",
+  "email": "staffauth{{runId}}second@inu.ac.kr",
+  "name": "QA Staff Second",
+  "position": "주임",
+  "password": "qaStaffPass1234"
+}
+
+> {%
+client.test("이미 소모된 초대 코드 400 INVALID_INVITE_CODE", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INVITE_CODE", "expected INVALID_INVITE_CODE, got " + response.body.error.code);
+});
+%}
+
+### 3. 담당자 회원가입 - 존재하지 않는 초대 코드 -> 400 INVALID_INVITE_CODE
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "NO-SUCH-CODE-{{runId}}",
+  "email": "staffauth{{runId}}third@inu.ac.kr",
+  "name": "QA Staff Third",
+  "position": "주임",
+  "password": "qaStaffPass1234"
+}
+
+> {%
+client.test("존재하지 않는 초대 코드 400 INVALID_INVITE_CODE", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INVITE_CODE", "expected INVALID_INVITE_CODE, got " + response.body.error.code);
+});
+%}
+
+### 4. 담당자 회원가입 - 이메일 중복 -> 409 DUPLICATE_ACCOUNT (이메일 중복 체크가 초대 코드 체크보다 먼저다)
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "ANY-VALUE-DOES-NOT-MATTER",
+  "email": "{{staffEmail}}",
+  "name": "QA Staff Dup",
+  "position": "주임",
+  "password": "qaStaffPass1234"
+}
+
+> {%
+client.test("이메일 중복 409 DUPLICATE_ACCOUNT", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "DUPLICATE_ACCOUNT", "expected DUPLICATE_ACCOUNT, got " + response.body.error.code);
+});
+%}
+
+### 5. 담당자 로그인 성공
+POST {{host}}/auth/staff/login
+Content-Type: application/json
+
+{ "email": "{{staffEmail}}", "password": "{{staffPassword}}" }
+
+> {%
+client.test("담당자 로그인 성공 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(typeof response.body.data.access_token === "string" && response.body.data.access_token.length > 0, "access_token should be present");
+    client.assert(typeof response.body.data.refresh_token === "string" && response.body.data.refresh_token.length > 0, "refresh_token should be present");
+});
+client.global.set("staffAccessToken", response.body.data.access_token);
+client.global.set("staffRefreshToken", response.body.data.refresh_token);
+%}
+
+### 6. 담당자 로그인 - 비밀번호 틀림 -> 401 INVALID_CREDENTIALS
+POST {{host}}/auth/staff/login
+Content-Type: application/json
+
+{ "email": "{{staffEmail}}", "password": "wrongPassword1" }
+
+> {%
+client.test("담당자 로그인 비밀번호 틀림 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_CREDENTIALS", "expected INVALID_CREDENTIALS, got " + response.body.error.code);
+});
+%}
+
+### 7. 담당자 로그인 - 존재하지 않는 이메일 -> 401 INVALID_CREDENTIALS
+POST {{host}}/auth/staff/login
+Content-Type: application/json
+
+{ "email": "nosuch{{runId}}@inu.ac.kr", "password": "wrongPassword1" }
+
+> {%
+client.test("존재하지 않는 담당자 계정도 401 동일 메시지", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_CREDENTIALS", "expected INVALID_CREDENTIALS, got " + response.body.error.code);
+});
+%}
+
+### 8. 담당자 리프레시 토큰 재발급 성공
+POST {{host}}/auth/staff/refresh
+Content-Type: application/json
+
+{ "refresh_token": "{{staffRefreshToken}}" }
+
+> {%
+client.test("담당자 리프레시 성공 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(typeof response.body.data.access_token === "string" && response.body.data.access_token.length > 0, "access_token should be present");
+});
+%}
+
+### 9. 담당자 리프레시 - 잘못된 토큰 -> 401 INVALID_REFRESH_TOKEN
+POST {{host}}/auth/staff/refresh
+Content-Type: application/json
+
+{ "refresh_token": "not-a-real-jwt" }
+
+> {%
+client.test("잘못된 리프레시 토큰 401", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_REFRESH_TOKEN", "expected INVALID_REFRESH_TOKEN, got " + response.body.error.code);
+});
+%}
+
+### 10. 내 담당자 프로필 조회 성공 (/admin/staff/me — role 게이트 통과)
+GET {{host}}/admin/staff/me
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("담당자 프로필 조회 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.id === "{{staffId}}", "id should match signed-up staff");
+    client.assert(response.body.data.email === "{{staffEmail}}", "email should match");
+    client.assert(response.body.data.department === "QA팀", "department should be copied from invite code");
+    client.assert(response.body.data.university_name === "인천대학교", "university_name should be 인천대학교");
+    client.assert(response.body.data.verified === false, "verified should still be false (no approval flow exists yet)");
+});
+%}
+
+### 11. 토큰 없이 /admin/** 접근 -> 401 UNAUTHORIZED
+GET {{host}}/admin/staff/me
+
+> {%
+client.test("토큰 없이 401 UNAUTHORIZED", function () {
+    client.assert(response.status === 401, "expected 401, got " + response.status);
+    client.assert(response.body.error.code === "UNAUTHORIZED", "expected UNAUTHORIZED, got " + response.body.error.code);
+});
+%}
+
+### 12. STUDENT role 토큰으로 /admin/** 접근 -> 403 FORBIDDEN
+< {%
+    request.variables.set("studentLoginId2", "qa" + client.global.get("runId") + "adm");
+%}
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "{{studentLoginId2}}",
+  "email": "qa{{runId}}adm@inu.ac.kr",
+  "name": "QA Student For Admin Check",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("교차 확인용 학생 가입 201", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+});
+%}
+
+### 13. (12에서 만든 학생으로 로그인)
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "{{studentLoginId2}}", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("교차 확인용 학생 로그인 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+});
+client.global.set("crossCheckStudentToken", response.body.data.access_token);
+%}
+
+### 14. 학생 토큰으로 /admin/staff/me 접근 -> 403 FORBIDDEN
+GET {{host}}/admin/staff/me
+Authorization: Bearer {{crossCheckStudentToken}}
+
+> {%
+client.test("STUDENT 토큰으로 /admin/** 접근 403 FORBIDDEN", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}
+
+### 15. 담당자 로그아웃 성공
+POST {{host}}/auth/staff/logout
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("담당자 로그아웃 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data === null || response.body.data === undefined, "data should be null/absent (Jackson non_null omits it from JSON)");
+});
+%}

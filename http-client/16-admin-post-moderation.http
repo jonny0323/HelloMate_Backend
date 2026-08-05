@@ -1,0 +1,144 @@
+### admin community moderation domain — AdminPostController (/admin/posts/**)
+### 사전 준비: seed-invite-codes.sql (초대 코드 HTTP-TEST-POSTS)
+
+### 1. 담당자 회원가입 + 로그인
+< {%
+    const runId = Date.now();
+    client.global.set("runId", runId);
+%}
+POST {{host}}/auth/staff/signup
+Content-Type: application/json
+
+{
+  "invite_code": "HTTP-TEST-POSTS",
+  "email": "modstaff{{runId}}@inu.ac.kr",
+  "name": "QA Moderation Staff",
+  "position": "주임",
+  "password": "qaStaffPass1234"
+}
+
+> {%
+client.test("담당자 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 2.
+POST {{host}}/auth/staff/login
+Content-Type: application/json
+
+{ "email": "modstaff{{runId}}@inu.ac.kr", "password": "qaStaffPass1234" }
+
+> {%
+client.test("담당자 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("staffAccessToken", response.body.data.access_token);
+%}
+
+### 3. 학생 회원가입 + 로그인
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}md",
+  "email": "qa{{runId}}md@inu.ac.kr",
+  "name": "QA Moderation Student",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 가입 201", function () { client.assert(response.status === 201); });
+%}
+
+### 4.
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}md", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("studentAccessToken", response.body.data.access_token);
+%}
+
+### 5. 신고 대상 게시글 작성
+POST {{host}}/posts
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "title": "QA 신고 대상 게시글 {{runId}}", "content": "모더레이션 테스트용 본문", "anonymous": false }
+
+> {%
+client.test("게시글 작성 201", function () { client.assert(response.status === 201); });
+client.global.set("postId", response.body.data.id);
+%}
+
+### 6. 게시글 신고
+POST {{host}}/posts/{{postId}}/report
+Authorization: Bearer {{studentAccessToken}}
+Content-Type: application/json
+
+{ "reason": "부적절한 내용입니다." }
+
+> {%
+client.test("게시글 신고 201", function () { client.assert(response.status === 201); });
+%}
+
+### 7. 담당자 - 신고된 게시글 목록 조회
+GET {{host}}/admin/posts?page=1&size=50
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("신고 큐에 방금 신고한 게시글 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const target = response.body.data.filter(function (r) { return r.post_id === "{{postId}}"; })[0];
+    client.assert(target !== undefined, "reported post should appear in the moderation queue");
+    client.assert(target.status === "pending", "expected pending, got " + target.status);
+    client.assert(target.reason === "부적절한 내용입니다.", "reason should match");
+    client.assert(target.post_title === "QA 신고 대상 게시글 {{runId}}", "post_title should match");
+});
+%}
+
+### 8. 담당자 - 신고된 게시글 강제 삭제
+DELETE {{host}}/admin/posts/{{postId}}
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("관리자 강제 삭제 200", function () { client.assert(response.status === 200); });
+%}
+
+### 9. 담당자 - 존재하지 않는 게시글 삭제 -> 404 POST_NOT_FOUND
+DELETE {{host}}/admin/posts/post-does-not-exist-{{runId}}
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("존재하지 않는 게시글 삭제 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "POST_NOT_FOUND", "expected POST_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 10. 삭제 확인 - 학생 쪽에서 조회하면 404 POST_NOT_FOUND
+GET {{host}}/posts/{{postId}}
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("강제 삭제된 게시글 조회 404", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "POST_NOT_FOUND", "expected POST_NOT_FOUND, got " + response.body.error.code);
+});
+%}
+
+### 11. 학생 토큰으로 /admin/posts 접근 -> 403 FORBIDDEN
+GET {{host}}/admin/posts
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("STUDENT 토큰으로 /admin/posts 접근 403 FORBIDDEN", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}
