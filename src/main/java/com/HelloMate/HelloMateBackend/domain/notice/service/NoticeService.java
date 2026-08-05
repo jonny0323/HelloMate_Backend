@@ -67,9 +67,12 @@ public class NoticeService {
     public CreateNoticeResponse createAndSend(String staffId, CreateNoticeRequest request) {
         Staff author = staffService.getStaff(staffId);
 
-        Notice notice = Notice.sent(UuidCreator.create(), author, request.title(), request.content(), request.type());
+        // 즉시 발송도 초안으로 만들어 dispatch()의 markSent()로 확정한다 — 발송 확정 지점을 하나로 유지.
+        // PK를 앱에서 채워 넣으므로 save()는 persist가 아니라 merge를 탄다. 인자로 넘긴 인스턴스는
+        // detached로 남아 이후 변경(markSent 등)이 flush되지 않으니, 반환된 관리 인스턴스를 써야 한다.
+        Notice notice = noticeRepository.save(
+                Notice.draft(UuidCreator.create(), author, request.title(), request.content(), request.type()));
         notice.assignBannerPeriod(request.bannerStartDate(), request.bannerEndDate());
-        noticeRepository.save(notice);
 
         attachFiles(notice, request.files());
         int recipientCount = dispatch(notice, author, request.audience());

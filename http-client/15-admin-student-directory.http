@@ -128,3 +128,34 @@ client.test("STUDENT 토큰으로 /admin/students 접근 403 FORBIDDEN", functio
     client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
 });
 %}
+
+### 10. 담당자 - 공지 대상 그룹(학과 · 국가) 목록
+GET {{host}}/admin/students/target-groups
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("대상 그룹 목록 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(Array.isArray(response.body.data), "data should be an array");
+    client.assert(response.body.data.length >= 1, "expected at least 1 target group");
+    response.body.data.forEach(function (g) {
+        client.assert(g.type === "COUNTRY" || g.type === "MAJOR", "unexpected group type: " + g.type);
+        client.assert(typeof g.group_key === "string" && g.group_key.length > 0, "group_key should be a non-empty string");
+        client.assert(typeof g.label === "string" && g.label.length > 0, "label should be a non-empty string");
+        client.assert(g.count >= 1, "group count should be at least 1, got " + g.count);
+    });
+    const country = response.body.data.filter(function (g) { return g.type === "COUNTRY" && g.group_key === "KR"; })[0];
+    client.assert(country !== undefined, "KR should appear as a country group (test student is country=KR)");
+});
+%}
+
+### 11. 학생 토큰으로 대상 그룹 조회 -> 403 FORBIDDEN
+GET {{host}}/admin/students/target-groups
+Authorization: Bearer {{studentAccessToken}}
+
+> {%
+client.test("STUDENT 토큰으로 대상 그룹 조회 403 FORBIDDEN", function () {
+    client.assert(response.status === 403, "expected 403, got " + response.status);
+    client.assert(response.body.error.code === "FORBIDDEN", "expected FORBIDDEN, got " + response.body.error.code);
+});
+%}

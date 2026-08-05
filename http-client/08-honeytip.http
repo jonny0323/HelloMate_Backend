@@ -224,3 +224,42 @@ client.test("존재하지 않는 수정 요청 404", function () {
     client.assert(response.body.error.code === "HONEY_TIP_EDIT_REQUEST_NOT_FOUND", "expected HONEY_TIP_EDIT_REQUEST_NOT_FOUND, got " + response.body.error.code);
 });
 %}
+
+### 16. 담당자 - 승인 상태로 필터링한 전체 수정 요청 목록
+GET {{host}}/admin/honey-tips/edit-requests?status=approved&page=1&size=20
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("승인된 수정 요청 목록에 14번에서 승인한 건이 있다", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(Array.isArray(response.body.data), "data should be an array");
+    const target = response.body.data.filter(function (r) { return r.id === "{{editRequestId}}"; })[0];
+    client.assert(target !== undefined, "approved edit request should be present");
+    client.assert(target.status === "approved", "expected approved, got " + target.status);
+    client.assert(target.honey_tip_id === "{{honeyTipId}}", "honey_tip_id should match");
+});
+%}
+
+### 17. 담당자 - status 없이 전체 수정 요청 목록 (페이지 메타 확인)
+GET {{host}}/admin/honey-tips/edit-requests?page=1&size=20
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("전체 수정 요청 목록 200 + page meta", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.meta.page === 1, "meta.page should be 1");
+    client.assert(response.body.meta.size === 20, "meta.size should be 20");
+    client.assert(response.body.meta.total >= 1, "meta.total should be at least 1");
+});
+%}
+
+### 18. 담당자 - 잘못된 status 값 -> 400 INVALID_INPUT
+GET {{host}}/admin/honey-tips/edit-requests?status=zzz
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("알 수 없는 status는 400 INVALID_INPUT", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INPUT", "expected INVALID_INPUT, got " + response.body.error.code);
+});
+%}

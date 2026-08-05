@@ -292,3 +292,94 @@ client.test("존재하지 않는 noticeId로 문의 시작 404 NOTICE_NOT_FOUND"
     client.assert(response.body.error.code === "NOTICE_NOT_FOUND", "expected NOTICE_NOT_FOUND, got " + response.body.error.code);
 });
 %}
+
+### 22. 담당자가 먼저 말 거는 경우 — 대상 학생 가입
+POST {{host}}/auth/students/signup
+Content-Type: application/json
+
+{
+  "login_id": "qa{{runId}}ce",
+  "email": "qa{{runId}}ce@inu.ac.kr",
+  "name": "QA Chat Student E",
+  "password": "qaPass1234",
+  "country": "KR",
+  "language": "ko",
+  "student_type": "정규과정생",
+  "university_id": "univ-inu",
+  "terms_agreed": true,
+  "privacy_agreed": true
+}
+
+> {%
+client.test("학생 E 가입 201", function () { client.assert(response.status === 201); });
+client.global.set("studentEId", response.body.data.id);
+%}
+
+### 23. 담당자 -> 학생 대화 시작
+POST {{host}}/admin/chats/threads
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "student_id": "{{studentEId}}", "message": "제출하신 서류 관련해서 연락드립니다." }
+
+> {%
+client.test("담당자 발신 스레드 생성 201", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(typeof response.body.data.thread_id === "string" && response.body.data.thread_id.length > 0,
+        "thread_id should be a non-empty string");
+});
+client.global.set("staffInitiatedThreadId", response.body.data.thread_id);
+%}
+
+### 24. 같은 학생에게 또 보내면 스레드는 재사용된다
+POST {{host}}/admin/chats/threads
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "student_id": "{{studentEId}}", "message": "추가로 안내드릴 내용이 있습니다." }
+
+> {%
+client.test("기존 스레드 재사용", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.thread_id === "{{staffInitiatedThreadId}}", "should reuse the existing thread");
+});
+%}
+
+### 25. 학생 E 로그인 - 담당자가 시작한 스레드가 목록에 보인다
+POST {{host}}/auth/students/login
+Content-Type: application/json
+
+{ "login_id": "qa{{runId}}ce", "password": "qaPass1234", "auto_login": false }
+
+> {%
+client.test("학생 E 로그인 200", function () { client.assert(response.status === 200); });
+client.global.set("tokenE", response.body.data.access_token);
+%}
+
+### 26.
+GET {{host}}/chats/threads
+Authorization: Bearer {{tokenE}}
+
+> {%
+client.test("학생 쪽 목록에 담당자 발신 스레드가 보이고 미읽음이다", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const thread = response.body.data.filter(function (t) { return t.thread_id === "{{staffInitiatedThreadId}}"; })[0];
+    client.assert(thread !== undefined, "staff-initiated thread should be visible to the student");
+    client.assert(thread.initiated_by === "staff", "expected initiated_by=staff, got " + thread.initiated_by);
+    client.assert(thread.unread === true, "student should have an unread flag on a staff-initiated thread");
+});
+%}
+
+### 27. 담당자 - 존재하지 않는 학생에게 대화 시작 -> 404 STUDENT_NOT_FOUND
+POST {{host}}/admin/chats/threads
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "student_id": "student-does-not-exist-{{runId}}", "message": "보낼 수 없어야 합니다." }
+
+> {%
+client.test("존재하지 않는 학생에게 대화 시작 404 STUDENT_NOT_FOUND", function () {
+    client.assert(response.status === 404, "expected 404, got " + response.status);
+    client.assert(response.body.error.code === "STUDENT_NOT_FOUND", "expected STUDENT_NOT_FOUND, got " + response.body.error.code);
+});
+%}

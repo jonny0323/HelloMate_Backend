@@ -55,9 +55,10 @@ public class ClubService {
     @Transactional
     public ClubResponse createClub(String studentId, CreateClubRequest request) {
         Student creator = studentService.getStudent(studentId);
-        Club club = new Club(UuidCreator.create(), creator.getUniversity(), creator, request.title(),
-                request.introduction(), request.maxMembers(), request.deadline());
-        clubRepository.save(club);
+        // PK를 앱에서 채워 넣으므로 save()는 merge를 탄다 — 반환된 관리 인스턴스를 써야 아래
+        // increaseMember()가 DB에 반영된다(넘긴 인스턴스는 detached로 남는다).
+        Club club = clubRepository.save(new Club(UuidCreator.create(), creator.getUniversity(), creator,
+                request.title(), request.introduction(), request.maxMembers(), request.deadline()));
 
         clubMemberRepository.save(new ClubMember(UuidCreator.create(), club, creator));
         club.increaseMember();

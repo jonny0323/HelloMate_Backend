@@ -25,7 +25,7 @@ class NoticeTest {
     }
 
     private Notice sentNotice(Staff author) {
-        Notice notice = Notice.sent("notice-1", author, "건강보험 안내", "내용", NoticeType.NORMAL);
+        Notice notice = Notice.draft("notice-1", author, "건강보험 안내", "내용", NoticeType.NORMAL);
         notice.markSent(312, AudienceMode.ALL, "전체 학생");
         return notice;
     }
@@ -33,7 +33,7 @@ class NoticeTest {
     @Test
     @DisplayName("부서는 요청이 아니라 작성자에게서 가져온다")
     void departmentComesFromAuthor() {
-        Notice notice = Notice.sent("notice-1", staff("univ-inu", "국제교류처"), "제목", "내용", NoticeType.NORMAL);
+        Notice notice = Notice.draft("notice-1", staff("univ-inu", "국제교류처"), "제목", "내용", NoticeType.NORMAL);
 
         assertThat(notice.getDepartment()).isEqualTo("국제교류처");
     }
@@ -47,6 +47,17 @@ class NoticeTest {
         assertThat(draft.getTitle()).isEmpty();
         assertThat(draft.getContent()).isEmpty();
         assertThat(draft.getSentAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("갓 만든 공지는 발송 전 상태라 바로 발송할 수 있다")
+    void freshNoticeIsSendable() {
+        // 생성 시점에 SENT로 만들어 두면 즉시발송(createAndSend)이 자기 자신을 중복 발송으로 오인한다.
+        Notice notice = Notice.draft("notice-1", staff("univ-inu", "국제교류처"), "제목", "내용", NoticeType.NORMAL);
+
+        notice.markSent(5, AudienceMode.ALL, "전체 학생");
+
+        assertThat(notice.getStatus()).isEqualTo(NoticeStatus.SENT);
     }
 
     @Test

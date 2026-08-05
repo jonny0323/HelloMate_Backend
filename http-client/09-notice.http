@@ -322,3 +322,173 @@ client.test("삭제된 공지 학생 조회 404", function () {
     client.assert(response.body.error.code === "NOTICE_NOT_FOUND", "expected NOTICE_NOT_FOUND, got " + response.body.error.code);
 });
 %}
+
+### 25. 담당자 - 발송 전 수신자 수 미리 확인 (전체 대상)
+POST {{host}}/admin/notices/audience/count
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "mode": "all" }
+
+> {%
+client.test("수신자 수 미리보기 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.recipient_count >= 1, "recipient_count should be at least 1");
+    client.assert(typeof response.body.data.audience_label === "string" && response.body.data.audience_label.length > 0,
+        "audience_label should be a non-empty string");
+});
+%}
+
+### 26. 담당자 - 개별 대상 수신자 수는 지정한 학생 수와 같다
+POST {{host}}/admin/notices/audience/count
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "mode": "individual", "student_ids": ["{{studentId}}"] }
+
+> {%
+client.test("개별 대상 수신자 수 1명", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.recipient_count === 1, "expected 1, got " + response.body.data.recipient_count);
+});
+%}
+
+### 27. 담당자 - mode 누락 -> 400 INVALID_INPUT
+POST {{host}}/admin/notices/audience/count
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "student_ids": ["{{studentId}}"] }
+
+> {%
+client.test("mode 없으면 400 INVALID_INPUT", function () {
+    client.assert(response.status === 400, "expected 400, got " + response.status);
+    client.assert(response.body.error.code === "INVALID_INPUT", "expected INVALID_INPUT, got " + response.body.error.code);
+});
+%}
+
+### 28. 담당자 - 공지 임시저장
+POST {{host}}/admin/notices/drafts
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{
+  "title": "QA 초안 {{runId}}",
+  "content": "아직 쓰는 중인 본문",
+  "type": "normal"
+}
+
+> {%
+client.test("임시저장 201", function () {
+    client.assert(response.status === 201, "expected 201, got " + response.status);
+    client.assert(response.body.data.title === "QA 초안 {{runId}}", "title should match");
+    client.assert(response.body.data.type === "normal", "expected normal, got " + response.body.data.type);
+});
+client.global.set("draftId", response.body.data.id);
+%}
+
+### 29. 담당자 - 내 임시저장 목록에 방금 만든 초안이 있다
+GET {{host}}/admin/notices/drafts
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("임시저장 목록에 초안 포함", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(Array.isArray(response.body.data), "data should be an array");
+    const found = response.body.data.filter(function (d) { return d.id === "{{draftId}}"; })[0];
+    client.assert(found !== undefined, "saved draft should be in the list");
+});
+%}
+
+### 30. 담당자 - 초안 수정
+PATCH {{host}}/admin/notices/drafts/{{draftId}}
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{
+  "title": "QA 초안 수정본 {{runId}}",
+  "content": "다 쓴 본문",
+  "type": "urgent"
+}
+
+> {%
+client.test("초안 수정 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.title === "QA 초안 수정본 {{runId}}", "title should be updated");
+    client.assert(response.body.data.type === "urgent", "expected urgent, got " + response.body.data.type);
+});
+%}
+
+### 31. 담당자 - 초안 발송
+POST {{host}}/admin/notices/drafts/{{draftId}}/send
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{
+  "title": "QA 초안 발송 {{runId}}",
+  "content": "다 쓴 본문",
+  "type": "normal",
+  "audience": { "mode": "all" }
+}
+
+> {%
+client.test("초안 발송 200 - 수신자 1명 이상", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.id === "{{draftId}}", "id should stay the same after sending a draft");
+    client.assert(response.body.data.total_recipient_count >= 1, "total_recipient_count should be at least 1");
+    client.assert(response.body.data.sent_at !== null && response.body.data.sent_at !== undefined, "sent_at should be set");
+});
+%}
+
+### 32. 담당자 - 발송한 초안은 임시저장 목록에서 빠진다
+GET {{host}}/admin/notices/drafts
+Authorization: Bearer {{staffAccessToken}}
+
+> {%
+client.test("발송된 초안은 목록에 없음", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    const found = response.body.data.filter(function (d) { return d.id === "{{draftId}}"; })[0];
+    client.assert(found === undefined, "sent notice should no longer be listed as a draft");
+});
+%}
+
+### 33. 담당자 - 발송된 공지 내용 수정
+PATCH {{host}}/admin/notices/{{draftId}}
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{
+  "title": "QA 발송 후 수정 {{runId}}",
+  "type": "urgent",
+  "banner_start_date": "2020-01-01",
+  "banner_end_date": "2099-12-31"
+}
+
+> {%
+client.test("발송 공지 수정 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.title === "QA 발송 후 수정 {{runId}}", "title should be updated");
+    client.assert(response.body.data.type === "urgent", "expected urgent, got " + response.body.data.type);
+    client.assert(response.body.data.status === "sent", "status should stay sent, got " + response.body.data.status);
+    client.assert(response.body.data.content === "다 쓴 본문", "content should stay unchanged when omitted");
+});
+%}
+
+### 34. 담당자 - 이미 발송된 공지를 초안 발송 -> 409 NOTICE_ALREADY_SENT
+POST {{host}}/admin/notices/drafts/{{draftId}}/send
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{
+  "title": "두 번 보내면 안 됨",
+  "content": "본문",
+  "type": "normal",
+  "audience": { "mode": "all" }
+}
+
+> {%
+client.test("발송된 공지 재발송 시도 409 NOTICE_ALREADY_SENT", function () {
+    client.assert(response.status === 409, "expected 409, got " + response.status);
+    client.assert(response.body.error.code === "NOTICE_ALREADY_SENT", "expected NOTICE_ALREADY_SENT, got " + response.body.error.code);
+});
+%}

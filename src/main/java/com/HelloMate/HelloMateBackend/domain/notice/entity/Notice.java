@@ -101,14 +101,14 @@ public class Notice extends BaseTimeEntity {
         this.resendCount = 0;
     }
 
-    /** 임시저장. 제목/내용이 아직 비어 있을 수 있어 빈 문자열을 허용한다(컬럼은 NOT NULL 유지). */
+    /**
+     * 공지는 항상 DRAFT로 태어나고 {@link #markSent}로만 SENT가 된다. 즉시 발송도 마찬가지다 —
+     * 생성 시점에 SENT로 만들어 두면 뒤따르는 markSent()가 자기 자신을 중복 발송으로 오인한다.
+     * 제목/내용은 임시저장이면 아직 비어 있을 수 있어 빈 문자열을 허용한다(컬럼은 NOT NULL 유지).
+     */
     public static Notice draft(String id, Staff author, String title, String content, NoticeType type) {
         return new Notice(id, author.getUniversity(), author,
                 title == null ? "" : title, content == null ? "" : content, type, NoticeStatus.DRAFT);
-    }
-
-    public static Notice sent(String id, Staff author, String title, String content, NoticeType type) {
-        return new Notice(id, author.getUniversity(), author, title, content, type, NoticeStatus.SENT);
     }
 
     public void assignBannerPeriod(LocalDate startDate, LocalDate endDate) {

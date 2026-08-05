@@ -232,7 +232,38 @@ client.test("STUDENT 토큰으로 /admin/** 접근 403 FORBIDDEN", function () {
 });
 %}
 
-### 15. 담당자 로그아웃 성공
+### 15. 담당자 - 내 프로필 수정 (이름/직위)
+PATCH {{host}}/admin/staff/me
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "name": "QA Staff 수정본 {{runId}}", "position": "과장" }
+
+> {%
+client.test("담당자 프로필 수정 200", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.name === "QA Staff 수정본 {{runId}}", "name should be updated");
+    client.assert(response.body.data.position === "과장", "position should be updated");
+    client.assert(response.body.data.department === "QA팀", "department should not change (초대 코드로 고정)");
+});
+%}
+
+### 16. 담당자 - 이름만 보내면 직위는 그대로다
+PATCH {{host}}/admin/staff/me
+Authorization: Bearer {{staffAccessToken}}
+Content-Type: application/json
+
+{ "name": "QA Staff 최종본 {{runId}}" }
+
+> {%
+client.test("부분 수정 시 나머지 필드 유지", function () {
+    client.assert(response.status === 200, "expected 200, got " + response.status);
+    client.assert(response.body.data.name === "QA Staff 최종본 {{runId}}", "name should be updated");
+    client.assert(response.body.data.position === "과장", "position should stay as-is, got " + response.body.data.position);
+});
+%}
+
+### 17. 담당자 로그아웃 성공
 POST {{host}}/auth/staff/logout
 Authorization: Bearer {{staffAccessToken}}
 
