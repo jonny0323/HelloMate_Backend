@@ -26,6 +26,10 @@ dependencies {
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 
+	// 로컬 개발 시 .env 파일을 환경변수로 읽어들인다. 배포 환경은 실제 OS 환경변수를 쓰므로
+	// 이 의존성 자체가 관여하지 않는다(developmentOnly).
+	developmentOnly 'me.paulschwarz:springboot3-dotenv:5.0.1'
+
 	// JWT
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'

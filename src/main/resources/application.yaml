@@ -3,9 +3,9 @@ spring:
     name: HelloMateBackend
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/hellomate
-    username: hellomate
-    password: hellomate
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/hellomate}
+    username: ${DB_USERNAME:hellomate}
+    password: ${DB_PASSWORD:hellomate}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -28,7 +28,7 @@ spring:
     default-property-inclusion: non_null
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 springdoc:
   swagger-ui:
@@ -38,7 +38,7 @@ springdoc:
 
 hellomate:
   jwt:
-    secret: "hellomate-local-dev-secret-key-change-me-in-production-0123456789"
+    secret: ${JWT_SECRET:hellomate-local-dev-secret-key-change-me-in-production-0123456789}
     access-token-validity-ms: 3600000      # 1h
     refresh-token-validity-ms: 86400000    # 1d  (자동 로그인 미체크)
     refresh-token-validity-auto-login-ms: 2592000000  # 30d (자동 로그인 체크)
@@ -47,4 +47,4 @@ hellomate:
     first-semester-start-month: 3
     second-semester-start-month: 9
   file:
-    base-url: "https://cdn.hellomate.app"
+    base-url: ${FILE_BASE_URL:https://cdn.hellomate.app}
