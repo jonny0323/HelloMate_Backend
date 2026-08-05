@@ -32,3 +32,8 @@ hellomate:
     second-semester-start-month: 9
   file:
     base-url: "https://cdn.hellomate.test"
+  cors:
+    allowed-origins: "http://localhost:5173"
+  # 테스트에서는 데모 데이터를 넣지 않는다 (LocalSeedDataInitializer 자체가 뜨지 않음).
+  seed:
+    enabled: false

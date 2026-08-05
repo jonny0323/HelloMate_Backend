@@ -1,5 +1,6 @@
 package com.HelloMate.HelloMateBackend.domain.student.repository;
 
+import com.HelloMate.HelloMateBackend.domain.student.dto.response.StudentGroupCountResponse;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -75,4 +76,22 @@ public interface StudentRepository extends JpaRepository<Student, String> {
     @Query("select count(s) from Student s where s.university.id = :universityId "
             + "and s.status = com.HelloMate.HelloMateBackend.domain.student.entity.StudentStatus.ACTIVE")
     long countActiveByUniversityId(@Param("universityId") String universityId);
+
+    /*
+     * 공지 작성 화면의 대상 그룹 카드용 집계.
+     * groupKey는 그대로 AudienceRequest로 되돌아오므로 발송 조회와 같은 표기를 써야 한다 —
+     * 국가는 findAudienceByCountry가 upper(s.country)로 비교하니 여기서도 대문자로 맞춘다.
+     */
+
+    @Query("select new com.HelloMate.HelloMateBackend.domain.student.dto.response.StudentGroupCountResponse("
+            + "upper(s.country), count(s)) from Student s where s.university.id = :universityId "
+            + "and s.status = com.HelloMate.HelloMateBackend.domain.student.entity.StudentStatus.ACTIVE "
+            + "group by upper(s.country) order by count(s) desc, upper(s.country) asc")
+    List<StudentGroupCountResponse> countActiveGroupByCountry(@Param("universityId") String universityId);
+
+    @Query("select new com.HelloMate.HelloMateBackend.domain.student.dto.response.StudentGroupCountResponse("
+            + "s.major, count(s)) from Student s where s.university.id = :universityId "
+            + "and s.status = com.HelloMate.HelloMateBackend.domain.student.entity.StudentStatus.ACTIVE "
+            + "and s.major is not null group by s.major order by count(s) desc, s.major asc")
+    List<StudentGroupCountResponse> countActiveGroupByMajor(@Param("universityId") String universityId);
 }

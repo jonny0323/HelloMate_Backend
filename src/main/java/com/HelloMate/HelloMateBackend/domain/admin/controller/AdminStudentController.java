@@ -1,6 +1,7 @@
 package com.HelloMate.HelloMateBackend.domain.admin.controller;
 
 import com.HelloMate.HelloMateBackend.domain.admin.dto.response.StudentDirectoryItemResponse;
+import com.HelloMate.HelloMateBackend.domain.admin.dto.response.TargetGroupResponse;
 import com.HelloMate.HelloMateBackend.domain.admin.service.AdminStudentService;
 import com.HelloMate.HelloMateBackend.domain.student.dto.response.StudentProfileResponse;
 import com.HelloMate.HelloMateBackend.global.common.response.ApiResponse;
@@ -35,6 +36,12 @@ public class AdminStudentController {
         Page<StudentDirectoryItemResponse> result = adminStudentService.getStudents(principal.id(), keyword, country,
                 major, grade, page, size);
         return ApiResponse.ok(result.getContent(), new PageMeta(page, size, result.getTotalElements()));
+    }
+
+    /** 공지 작성 화면의 '학과 · 국가별' 탭. {studentId} 매핑보다 먼저 잡히도록 리터럴 경로로 둔다. */
+    @GetMapping("/target-groups")
+    public ApiResponse<List<TargetGroupResponse>> getTargetGroups(@CurrentUser AuthPrincipal principal) {
+        return ApiResponse.ok(adminStudentService.getTargetGroups(principal.id()));
     }
 
     @GetMapping("/{studentId}")

@@ -48,3 +48,10 @@ hellomate:
     second-semester-start-month: 9
   file:
     base-url: ${FILE_BASE_URL:https://cdn.hellomate.app}
+  cors:
+    # 담당자 콘솔(Vite) 기본 포트. 배포에서는 CORS_ALLOWED_ORIGINS로 실제 도메인을 넣는다.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173}
+  seed:
+    # 로컬에서 빈 DB로 띄우면 로그인할 계정조차 없어서 화면 확인이 불가능하다.
+    # .env에 SEED_ENABLED=true를 넣은 개발 환경에서만 데모 데이터를 넣는다.
+    enabled: ${SEED_ENABLED:false}
