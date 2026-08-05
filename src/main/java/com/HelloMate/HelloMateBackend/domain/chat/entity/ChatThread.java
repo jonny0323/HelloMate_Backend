@@ -6,6 +6,8 @@ import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
 import com.HelloMate.HelloMateBackend.global.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -56,13 +58,18 @@ public class ChatThread extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean staffUnread;
 
-    public ChatThread(String id, Student student, Staff staff, Notice notice) {
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ThreadInitiator initiatedBy;
+
+    public ChatThread(String id, Student student, Staff staff, Notice notice, ThreadInitiator initiatedBy) {
         this.id = id;
         this.student = student;
         this.staff = staff;
         this.notice = notice;
         this.studentUnread = false;
         this.staffUnread = false;
+        this.initiatedBy = initiatedBy;
     }
 
     public void receiveMessage(SenderType senderType, String content, LocalDateTime sentAt) {

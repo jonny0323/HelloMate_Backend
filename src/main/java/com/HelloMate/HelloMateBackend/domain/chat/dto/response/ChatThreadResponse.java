@@ -1,5 +1,7 @@
 package com.HelloMate.HelloMateBackend.domain.chat.dto.response;
 
+import com.HelloMate.HelloMateBackend.domain.chat.entity.ThreadInitiator;
+
 import java.time.LocalDateTime;
 
 public record ChatThreadResponse(
@@ -9,6 +11,7 @@ public record ChatThreadResponse(
         String lastMessage,
         LocalDateTime lastMessageAt,
         boolean unread,
-        String noticeId
+        String noticeId,
+        ThreadInitiator initiatedBy
 ) {
 }

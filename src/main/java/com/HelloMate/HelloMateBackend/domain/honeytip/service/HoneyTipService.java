@@ -8,6 +8,7 @@ import com.HelloMate.HelloMateBackend.domain.honeytip.dto.response.HoneyTipEditR
 import com.HelloMate.HelloMateBackend.domain.honeytip.dto.response.HoneyTipResponse;
 import com.HelloMate.HelloMateBackend.domain.honeytip.dto.response.HoneyTipStep;
 import com.HelloMate.HelloMateBackend.domain.honeytip.entity.HoneyTip;
+import com.HelloMate.HelloMateBackend.domain.honeytip.entity.EditRequestStatus;
 import com.HelloMate.HelloMateBackend.domain.honeytip.entity.HoneyTipEdit;
 import com.HelloMate.HelloMateBackend.domain.honeytip.repository.HoneyTipEditRepository;
 import com.HelloMate.HelloMateBackend.domain.honeytip.repository.HoneyTipRepository;
@@ -22,6 +23,8 @@ import com.HelloMate.HelloMateBackend.global.common.exception.BusinessException;
 import com.HelloMate.HelloMateBackend.global.common.exception.ErrorCode;
 import com.HelloMate.HelloMateBackend.global.common.util.UuidCreator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,6 +88,15 @@ public class HoneyTipService {
         honeyTip.updateGuide(request.tipMessage(), honeyTipStepCodec.encode(request.steps()),
                 request.estimatedFee(), request.processingPeriod(), request.externalLink());
         return toResponse(honeyTip);
+    }
+
+    /** 담당자 콘솔의 수정 요청 처리 화면 — 학교 전체의 대기 건을 한 번에 본다. */
+    public Page<HoneyTipEditResponse> getEditRequestsForAdmin(String staffId, EditRequestStatus status,
+                                                               int page, int size) {
+        String universityId = staffService.getStaff(staffId).getUniversity().getId();
+        return honeyTipEditRepository
+                .findForAdmin(universityId, status, PageRequest.of(Math.max(page - 1, 0), size))
+                .map(HoneyTipEditResponse::from);
     }
 
     public List<HoneyTipEditResponse> getEditRequests(String honeyTipId) {

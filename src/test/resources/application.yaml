@@ -26,5 +26,9 @@ hellomate:
     access-token-validity-ms: 3600000
     refresh-token-validity-ms: 86400000
     refresh-token-validity-auto-login-ms: 2592000000
+  academic:
+    # 대시보드 '이번 학기' 경계. 학사일정 테이블이 생기기 전까지의 기준값이다.
+    first-semester-start-month: 3
+    second-semester-start-month: 9
   file:
     base-url: "https://cdn.hellomate.test"

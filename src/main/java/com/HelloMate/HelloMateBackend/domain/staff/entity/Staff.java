@@ -65,4 +65,21 @@ public class Staff extends BaseTimeEntity {
         this.verified = false;
         this.inviteCode = inviteCode;
     }
+
+    public void approve() {
+        this.verified = true;
+    }
+
+    public boolean isSameUniversity(String universityId) {
+        return this.university.getId().equals(universityId);
+    }
+
+    public void updateProfile(String name, String position) {
+        if (name != null && !name.isBlank()) {
+            this.name = name;
+        }
+        if (position != null && !position.isBlank()) {
+            this.position = position;
+        }
+    }
 }

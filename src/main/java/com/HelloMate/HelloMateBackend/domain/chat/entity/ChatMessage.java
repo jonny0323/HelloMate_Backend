@@ -35,10 +35,15 @@ public class ChatMessage extends BaseTimeEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    public ChatMessage(String id, ChatThread thread, SenderType senderType, String content) {
+    /** 학생은 모국어로 질문한다. 조회 시 상대방 언어로 번역해주려면 원문 언어를 알아야 한다. */
+    @Column(length = 10)
+    private String originalLang;
+
+    public ChatMessage(String id, ChatThread thread, SenderType senderType, String content, String originalLang) {
         this.id = id;
         this.thread = thread;
         this.senderType = senderType;
         this.content = content;
+        this.originalLang = originalLang;
     }
 }

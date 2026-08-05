@@ -1,5 +1,6 @@
 package com.HelloMate.HelloMateBackend.domain.staff.service;
 
+import com.HelloMate.HelloMateBackend.domain.staff.dto.request.StaffProfileUpdateRequest;
 import com.HelloMate.HelloMateBackend.domain.staff.dto.response.StaffProfileResponse;
 import com.HelloMate.HelloMateBackend.domain.staff.entity.Staff;
 import com.HelloMate.HelloMateBackend.domain.staff.repository.StaffRepository;
@@ -18,6 +19,13 @@ public class StaffService {
 
     public StaffProfileResponse getMyProfile(String staffId) {
         return StaffProfileResponse.from(getStaff(staffId));
+    }
+
+    @Transactional
+    public StaffProfileResponse updateMyProfile(String staffId, StaffProfileUpdateRequest request) {
+        Staff staff = getStaff(staffId);
+        staff.updateProfile(request.name(), request.position());
+        return StaffProfileResponse.from(staff);
     }
 
     public Staff getStaff(String staffId) {

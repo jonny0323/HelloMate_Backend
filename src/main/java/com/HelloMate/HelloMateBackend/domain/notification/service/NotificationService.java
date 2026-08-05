@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -41,6 +42,31 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationSettingRepository notificationSettingRepository;
     private final StudentService studentService;
+
+    /**
+     * 공지 팬아웃처럼 수백 명에게 한 번에 보낼 때 쓴다.
+     * notify()를 반복 호출하면 수신자마다 설정 조회 1 + insert 1이라 312명에 600회가 넘는다.
+     * 설정을 한 번에 읽고 saveAll로 묶는다.
+     */
+    @Transactional
+    public void notifyAll(List<Student> recipients, NotificationCategory category, String title,
+                          String linkType, String linkId) {
+        if (recipients.isEmpty()) {
+            return;
+        }
+        List<String> studentIds = recipients.stream().map(Student::getId).toList();
+        Set<String> disabledStudentIds = notificationSettingRepository
+                .findByStudentIdInAndCategory(studentIds, category).stream()
+                .filter(setting -> !setting.isEnabled())
+                .map(setting -> setting.getStudent().getId())
+                .collect(Collectors.toSet());
+
+        List<Notification> notifications = recipients.stream()
+                .filter(recipient -> !disabledStudentIds.contains(recipient.getId()))
+                .map(recipient -> new Notification(UuidCreator.create(), recipient, category, title, linkType, linkId))
+                .toList();
+        notificationRepository.saveAll(notifications);
+    }
 
     @Transactional
     public void notify(Student recipient, NotificationCategory category, String title, String linkType, String linkId) {

@@ -54,7 +54,10 @@ public class StaffAuthService {
                 passwordEncoder.encode(request.password()),
                 inviteCode
         );
+        // 초대 코드 자체가 승인 절차다 — 부서 관리자가 발급한 1회용 코드를 가진 사람만 가입할 수 있으므로
+        // 코드를 소진하는 시점에 승인 상태로 올린다. (별도 승인 화면을 두면 코드 발급이 무의미해진다)
         inviteCode.markUsed();
+        staff.approve();
         staffRepository.save(staff);
         return new StaffSignUpResponse(staff.getId(), staff.getName(), staff.isVerified());
     }
@@ -65,6 +68,10 @@ public class StaffAuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
         if (!passwordEncoder.matches(request.password(), staff.getPassword())) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+        }
+        // 승인되지 않은 계정은 /admin/** 전체에 접근하게 되므로 토큰 자체를 발급하지 않는다.
+        if (!staff.isVerified()) {
+            throw new BusinessException(ErrorCode.STAFF_NOT_VERIFIED);
         }
         return issueTokens(staff.getId());
     }

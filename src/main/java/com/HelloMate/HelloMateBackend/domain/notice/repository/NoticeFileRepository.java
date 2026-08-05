@@ -9,5 +9,4 @@ public interface NoticeFileRepository extends JpaRepository<NoticeFile, String> 
 
     List<NoticeFile> findByNoticeId(String noticeId);
 
-    void deleteByNoticeId(String noticeId);
 }

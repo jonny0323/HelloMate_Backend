@@ -5,12 +5,15 @@ import com.HelloMate.HelloMateBackend.domain.honeytip.dto.request.ReviewEditRequ
 import com.HelloMate.HelloMateBackend.domain.honeytip.dto.request.UpdateHoneyTipRequest;
 import com.HelloMate.HelloMateBackend.domain.honeytip.dto.response.HoneyTipEditResponse;
 import com.HelloMate.HelloMateBackend.domain.honeytip.dto.response.HoneyTipResponse;
+import com.HelloMate.HelloMateBackend.domain.honeytip.entity.EditRequestStatus;
 import com.HelloMate.HelloMateBackend.domain.honeytip.service.HoneyTipService;
 import com.HelloMate.HelloMateBackend.global.common.response.ApiResponse;
+import com.HelloMate.HelloMateBackend.global.common.response.PageMeta;
 import com.HelloMate.HelloMateBackend.global.security.AuthPrincipal;
 import com.HelloMate.HelloMateBackend.global.security.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,6 +45,15 @@ public class AdminHoneyTipController {
     public ApiResponse<HoneyTipResponse> updateHoneyTip(@PathVariable String honeyTipId,
                                                          @RequestBody UpdateHoneyTipRequest request) {
         return ApiResponse.ok(honeyTipService.updateHoneyTip(honeyTipId, request));
+    }
+
+    @GetMapping("/edit-requests")
+    public ApiResponse<List<HoneyTipEditResponse>> getEditRequestsForAdmin(@CurrentUser AuthPrincipal principal,
+                                                                            @RequestParam(required = false) EditRequestStatus status,
+                                                                            @RequestParam(defaultValue = "1") int page,
+                                                                            @RequestParam(defaultValue = "20") int size) {
+        Page<HoneyTipEditResponse> result = honeyTipService.getEditRequestsForAdmin(principal.id(), status, page, size);
+        return ApiResponse.ok(result.getContent(), new PageMeta(page, size, result.getTotalElements()));
     }
 
     @GetMapping("/{honeyTipId}/edit-requests")

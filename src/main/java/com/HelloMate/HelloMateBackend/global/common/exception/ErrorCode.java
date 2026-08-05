@@ -15,6 +15,8 @@ public enum ErrorCode {
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "리프레시 토큰이 유효하지 않습니다."),
     INVALID_INVITE_CODE(HttpStatus.BAD_REQUEST, "초대 코드가 유효하지 않거나 이미 사용되었습니다."),
     STAFF_NOT_VERIFIED(HttpStatus.FORBIDDEN, "아직 승인되지 않은 담당자 계정입니다."),
+    NOT_MY_UNIVERSITY(HttpStatus.FORBIDDEN, "다른 학교의 자료에는 접근할 수 없습니다."),
+    NOT_MY_DEPARTMENT(HttpStatus.FORBIDDEN, "다른 부서가 발송한 공지는 수정할 수 없습니다."),
     INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "인증번호가 일치하지 않아요."),
     VERIFICATION_CODE_EXPIRED(HttpStatus.BAD_REQUEST, "인증번호가 만료되었습니다."),
     INVALID_RESET_TOKEN(HttpStatus.UNAUTHORIZED, "재설정 요청이 만료되었거나 유효하지 않습니다."),
@@ -33,6 +35,12 @@ public enum ErrorCode {
     // notice
     NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 공지를 찾을 수 없습니다."),
     NOTICE_FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 첨부파일을 찾을 수 없습니다."),
+    NOTICE_AUDIENCE_EMPTY(HttpStatus.BAD_REQUEST, "조건에 해당하는 수신자가 없습니다. 대상을 다시 선택해 주세요."),
+    NOTICE_ALREADY_SENT(HttpStatus.CONFLICT, "이미 발송된 공지입니다."),
+    NOTICE_NOT_SENT(HttpStatus.CONFLICT, "아직 발송되지 않은 공지입니다."),
+    NOTICE_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "재발송은 24시간에 한 번만 가능합니다."),
+    NOTICE_ATTACHMENT_LIMIT(HttpStatus.BAD_REQUEST, "첨부파일은 최대 5개까지 등록할 수 있습니다."),
+    NOTICE_ATTACHMENT_TYPE(HttpStatus.BAD_REQUEST, "지원하지 않는 첨부파일 형식입니다."),
 
     // chat
     CHAT_THREAD_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 대화 스레드를 찾을 수 없습니다."),

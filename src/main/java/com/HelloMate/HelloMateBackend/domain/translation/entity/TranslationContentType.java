@@ -4,5 +4,6 @@ public enum TranslationContentType {
     POST,
     POST_COMMENT,
     NOTICE,
-    HONEY_TIP
+    HONEY_TIP,
+    CHAT_MESSAGE
 }
