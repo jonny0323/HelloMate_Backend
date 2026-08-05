@@ -27,6 +27,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -44,8 +45,10 @@ public class ClubService {
     public List<ClubResponse> getClubs(String studentId, String status) {
         Student student = studentService.getStudent(studentId);
         Boolean onlyOpen = status == null ? null : "open".equalsIgnoreCase(status);
-        return clubRepository.findByUniversityAndStatus(student.getUniversity().getId(), onlyOpen).stream()
-                .map(ClubResponse::from)
+        List<Club> clubs = clubRepository.findByUniversityAndStatus(student.getUniversity().getId(), onlyOpen);
+        Set<String> joinedClubIds = findJoinedClubIds(studentId, clubs);
+        return clubs.stream()
+                .map(club -> ClubResponse.of(club, joinedClubIds.contains(club.getId())))
                 .toList();
     }
 
@@ -59,11 +62,12 @@ public class ClubService {
         clubMemberRepository.save(new ClubMember(UuidCreator.create(), club, creator));
         club.increaseMember();
 
-        return ClubResponse.from(club);
+        return ClubResponse.of(club, true);
     }
 
-    public ClubResponse getClubDetail(String clubId) {
-        return ClubResponse.from(getClub(clubId));
+    public ClubResponse getClubDetail(String studentId, String clubId) {
+        Club club = getClub(clubId);
+        return ClubResponse.of(club, clubMemberRepository.existsByClubIdAndStudentId(clubId, studentId));
     }
 
     @Transactional
@@ -71,58 +75,79 @@ public class ClubService {
         Club club = getClub(clubId);
         requireCreator(club, studentId);
         club.updateInfo(request.title(), request.introduction(), request.maxMembers(), request.deadline());
-        return ClubResponse.from(club);
+        return ClubResponse.of(club, true);
     }
 
     @Transactional
     public void deleteClub(AuthPrincipal principal, String clubId) {
         Club club = getClub(clubId);
-        if (principal.isStudent() && !club.getCreator().getId().equals(principal.id())) {
+        if (principal.isStudent() && !club.isCreator(principal.id())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         clubMemberRepository.findByClubId(clubId).forEach(clubMemberRepository::delete);
         clubRepository.delete(club);
     }
 
+    /**
+     * 정원의 마지막 한 자리를 여러 명이 동시에 노리면 currentMembers 갱신이 겹쳐 정원을 넘긴다.
+     * 클럽 행을 잠그고 읽어 직렬화한다 — 참여는 빈도가 낮아서 잠금 비용보다 재시도 없는 단순함이 낫다.
+     */
     @Transactional
     public void join(String studentId, String clubId) {
-        Club club = getClub(clubId);
+        Club club = clubRepository.findByIdForUpdate(clubId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CLUB_NOT_FOUND));
         if (clubMemberRepository.existsByClubIdAndStudentId(clubId, studentId)) {
             throw new BusinessException(ErrorCode.ALREADY_CLUB_MEMBER);
         }
-        if (club.isFull()) {
-            throw new BusinessException(ErrorCode.CLUB_FULL);
-        }
+        club.join();
+
         Student student = studentService.getStudent(studentId);
         clubMemberRepository.save(new ClubMember(UuidCreator.create(), club, student));
-        club.increaseMember();
         notificationService.notify(club.getCreator(), NotificationCategory.CLUB,
                 "클럽에 새 멤버가 참여했어요", "club", club.getId());
     }
 
+    /**
+     * 클럽장이 그냥 나가면 클럽이 주인 없이 남는다. 위임하거나 클럽을 삭제하도록 막는다.
+     */
     @Transactional
     public void leave(String studentId, String clubId) {
         Club club = getClub(clubId);
+        if (club.isCreator(studentId)) {
+            throw new BusinessException(ErrorCode.CLUB_OWNER_CANNOT_LEAVE);
+        }
         ClubMember member = clubMemberRepository.findByClubIdAndStudentId(clubId, studentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_CLUB_MEMBER));
         clubMemberRepository.delete(member);
         club.decreaseMember();
     }
 
+    @Transactional
+    public ClubResponse transferOwner(String studentId, String clubId, String newCreatorId) {
+        Club club = getClub(clubId);
+        requireCreator(club, studentId);
+
+        ClubMember newOwner = clubMemberRepository.findByClubIdAndStudentId(clubId, newCreatorId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_CLUB_MEMBER, "위임 대상이 클럽 멤버가 아닙니다."));
+        club.changeCreator(newOwner.getStudent());
+        notificationService.notify(newOwner.getStudent(), NotificationCategory.CLUB,
+                "클럽장이 되었어요", "club", club.getId());
+        return ClubResponse.of(club, true);
+    }
+
     public List<ClubResponse> getMyClubs(String studentId) {
-        Set<String> joinedClubIds = clubMemberRepository.findByStudentId(studentId).stream()
-                .map(m -> m.getClub().getId())
-                .collect(java.util.stream.Collectors.toSet());
-        List<Club> createdClubs = clubRepository.findByCreatorId(studentId);
-        createdClubs.forEach(club -> joinedClubIds.add(club.getId()));
-        return clubRepository.findAllById(joinedClubIds).stream()
-                .map(ClubResponse::from)
+        Set<String> myClubIds = new LinkedHashSet<>();
+        clubMemberRepository.findByStudentId(studentId).forEach(member -> myClubIds.add(member.getClub().getId()));
+        clubRepository.findByCreatorId(studentId).forEach(club -> myClubIds.add(club.getId()));
+        return clubRepository.findAllById(myClubIds).stream()
+                .map(club -> ClubResponse.of(club, true))
                 .toList();
     }
 
+    /** 멤버 목록은 참여 중인 멤버라면 누구나 볼 수 있다 — 단톡방 헤더의 '멤버 N명'에서 진입한다. */
     public List<ClubMemberResponse> getMembers(String studentId, String clubId) {
         Club club = getClub(clubId);
-        requireCreator(club, studentId);
+        requireMember(club, studentId);
         return clubMemberRepository.findByClubId(clubId).stream()
                 .map(ClubMemberResponse::from)
                 .toList();
@@ -155,13 +180,20 @@ public class ClubService {
         return new CursorMeta(nextCursor, slice.hasNext(), slice.getContent().size());
     }
 
+    private Set<String> findJoinedClubIds(String studentId, List<Club> clubs) {
+        if (clubs.isEmpty()) {
+            return Set.of();
+        }
+        return clubMemberRepository.findJoinedClubIds(studentId, clubs.stream().map(Club::getId).toList());
+    }
+
     private Club getClub(String clubId) {
         return clubRepository.findById(clubId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CLUB_NOT_FOUND));
     }
 
     private void requireCreator(Club club, String studentId) {
-        if (!club.getCreator().getId().equals(studentId)) {
+        if (!club.isCreator(studentId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

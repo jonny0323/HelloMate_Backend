@@ -1,5 +1,6 @@
 package com.HelloMate.HelloMateBackend.domain.verification.dto.response;
 
+import com.HelloMate.HelloMateBackend.domain.verification.entity.DocumentType;
 import com.HelloMate.HelloMateBackend.domain.verification.entity.VerificationDocument;
 import com.HelloMate.HelloMateBackend.domain.verification.entity.VerificationStatus;
 
@@ -10,7 +11,10 @@ public record VerificationDocumentResponse(
         String studentId,
         String studentName,
         String fileUrl,
+        DocumentType documentType,
         VerificationStatus status,
+        String rejectReason,
+        LocalDateTime reviewedAt,
         LocalDateTime createdAt
 ) {
     public static VerificationDocumentResponse from(VerificationDocument document) {
@@ -19,7 +23,10 @@ public record VerificationDocumentResponse(
                 document.getStudent().getId(),
                 document.getStudent().getName(),
                 document.getFile().getFileUrl(),
+                document.getDocumentType(),
                 document.getStatus(),
+                document.getRejectReason(),
+                document.getReviewedAt(),
                 document.getCreatedAt()
         );
     }

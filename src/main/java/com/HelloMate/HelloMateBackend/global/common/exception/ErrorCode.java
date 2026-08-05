@@ -18,11 +18,17 @@ public enum ErrorCode {
     INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "인증번호가 일치하지 않아요."),
     VERIFICATION_CODE_EXPIRED(HttpStatus.BAD_REQUEST, "인증번호가 만료되었습니다."),
     INVALID_RESET_TOKEN(HttpStatus.UNAUTHORIZED, "재설정 요청이 만료되었거나 유효하지 않습니다."),
+    ACCOUNT_LOCKED(HttpStatus.LOCKED, "로그인 5회 실패로 계정이 잠겼습니다. 잠시 후 다시 시도해 주세요."),
+    ACCOUNT_WITHDRAWN(HttpStatus.FORBIDDEN, "탈퇴한 계정입니다."),
+    VERIFICATION_ATTEMPT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "인증 시도 횟수를 초과했습니다. 인증번호를 다시 받아주세요."),
+    VERIFICATION_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "잠시 후 다시 시도해 주세요."),
+    STUDENT_NOT_VERIFIED(HttpStatus.FORBIDDEN, "학생 인증이 필요합니다."),
 
     // user
     STUDENT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 학생을 찾을 수 없습니다."),
     STAFF_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 담당자를 찾을 수 없습니다."),
     DUPLICATE_ACCOUNT(HttpStatus.CONFLICT, "이미 가입된 계정입니다."),
+    DUPLICATE_LOGIN_ID(HttpStatus.CONFLICT, "이미 사용 중인 아이디입니다."),
 
     // notice
     NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 공지를 찾을 수 없습니다."),
@@ -36,12 +42,15 @@ public enum ErrorCode {
     COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 댓글을 찾을 수 없습니다."),
     ALREADY_LIKED(HttpStatus.CONFLICT, "이미 좋아요를 눌렀습니다."),
     NOT_LIKED_YET(HttpStatus.BAD_REQUEST, "좋아요를 누르지 않았습니다."),
+    REPLY_DEPTH_EXCEEDED(HttpStatus.BAD_REQUEST, "대댓글에는 답글을 달 수 없습니다."),
 
     // club
     CLUB_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 클럽을 찾을 수 없습니다."),
     CLUB_FULL(HttpStatus.CONFLICT, "클럽 정원이 초과되었습니다."),
     ALREADY_CLUB_MEMBER(HttpStatus.CONFLICT, "이미 참여 중인 클럽입니다."),
     NOT_CLUB_MEMBER(HttpStatus.BAD_REQUEST, "클럽에 참여 중이 아닙니다."),
+    CLUB_RECRUIT_CLOSED(HttpStatus.CONFLICT, "모집이 마감된 클럽입니다."),
+    CLUB_OWNER_CANNOT_LEAVE(HttpStatus.BAD_REQUEST, "클럽장은 나갈 수 없습니다. 클럽장을 위임하거나 클럽을 삭제해 주세요."),
 
     // honey tip
     HONEY_TIP_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 정보글을 찾을 수 없습니다."),
@@ -49,6 +58,7 @@ public enum ErrorCode {
 
     // verification
     VERIFICATION_DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 재학 인증 서류를 찾을 수 없습니다."),
+    REJECT_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "반려 사유를 입력해야 합니다."),
 
     // file
     FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 파일을 찾을 수 없습니다."),

@@ -41,8 +41,19 @@ public class VerificationDocument extends BaseTimeEntity {
     private UploadedFile file;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "document_type", nullable = false, length = 30)
+    private DocumentType documentType;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private VerificationStatus status;
+
+    /**
+     * 반려 사유. 디자인의 '서류 인증 실패' 화면에는 표시 영역이 없지만, 사유 없이 반려하면
+     * 학생이 같은 서류를 그대로 다시 올리는 루프에 빠진다.
+     */
+    @Column(length = 500)
+    private String rejectReason;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reviewed_by_staff_id")
@@ -50,15 +61,24 @@ public class VerificationDocument extends BaseTimeEntity {
 
     private LocalDateTime reviewedAt;
 
-    public VerificationDocument(String id, Student student, UploadedFile file) {
+    public VerificationDocument(String id, Student student, UploadedFile file, DocumentType documentType) {
         this.id = id;
         this.student = student;
         this.file = file;
+        this.documentType = documentType;
         this.status = VerificationStatus.PENDING;
     }
 
-    public void review(VerificationStatus status, Staff reviewer) {
-        this.status = status;
+    public void approve(Staff reviewer) {
+        this.status = VerificationStatus.APPROVED;
+        this.rejectReason = null;
+        this.reviewedBy = reviewer;
+        this.reviewedAt = LocalDateTime.now();
+    }
+
+    public void reject(Staff reviewer, String rejectReason) {
+        this.status = VerificationStatus.REJECTED;
+        this.rejectReason = rejectReason;
         this.reviewedBy = reviewer;
         this.reviewedAt = LocalDateTime.now();
     }

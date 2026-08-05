@@ -3,6 +3,7 @@ package com.HelloMate.HelloMateBackend.domain.community.controller;
 import com.HelloMate.HelloMateBackend.domain.community.dto.request.CreateCommentRequest;
 import com.HelloMate.HelloMateBackend.domain.community.dto.request.CreatePostRequest;
 import com.HelloMate.HelloMateBackend.domain.community.dto.request.ReportRequest;
+import com.HelloMate.HelloMateBackend.domain.community.dto.request.UpdatePostRequest;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.CreatePostResponse;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.PostCommentResponse;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.PostDetailResponse;
@@ -20,6 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -68,6 +70,13 @@ public class PostController {
                                                           @PathVariable String postId,
                                                           @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
         return ApiResponse.ok(postService.getPostDetail(principal.id(), postId, acceptLanguage));
+    }
+
+    @PatchMapping("/{postId}")
+    public ApiResponse<PostSummaryResponse> updatePost(@CurrentUser AuthPrincipal principal,
+                                                        @PathVariable String postId,
+                                                        @Valid @RequestBody UpdatePostRequest request) {
+        return ApiResponse.ok(postService.updatePost(principal.id(), postId, request));
     }
 
     @DeleteMapping("/{postId}")

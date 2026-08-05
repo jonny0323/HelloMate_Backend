@@ -52,6 +52,7 @@ public class NoticeService {
 
         Notice notice = new Notice(UuidCreator.create(), author.getUniversity(), author,
                 request.title(), request.content(), request.department(), request.type());
+        notice.assignBannerPeriod(request.bannerStartDate(), request.bannerEndDate());
         noticeRepository.save(notice);
 
         List<Student> recipients = resolveAudience(author.getUniversity().getId(), request.audience());

@@ -23,6 +23,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +67,11 @@ public class NotificationService {
                 ? CursorPageUtil.encode(slice.getContent().get(slice.getContent().size() - 1).getCreatedAt())
                 : null;
         return new CursorMeta(nextCursor, slice.hasNext(), slice.getContent().size());
+    }
+
+    @Transactional
+    public int markAllRead(String studentId) {
+        return notificationRepository.markAllRead(studentId, LocalDateTime.now());
     }
 
     @Transactional

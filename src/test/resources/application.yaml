@@ -24,6 +24,7 @@ hellomate:
   jwt:
     secret: "hellomate-test-secret-key-0123456789-0123456789"
     access-token-validity-ms: 3600000
-    refresh-token-validity-ms: 1209600000
+    refresh-token-validity-ms: 86400000
+    refresh-token-validity-auto-login-ms: 2592000000
   file:
     base-url: "https://cdn.hellomate.test"

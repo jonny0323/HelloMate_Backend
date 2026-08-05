@@ -16,6 +16,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Entity
 @Table(name = "notice")
 @Getter
@@ -50,6 +52,10 @@ public class Notice extends BaseTimeEntity {
     @Column(nullable = false)
     private int totalRecipientCount;
 
+    /** 공지 홈 상단 배너 노출 기간. 비워두면 기간 제한 없이 계속 배너로 뜬다. */
+    private LocalDate bannerStartDate;
+    private LocalDate bannerEndDate;
+
     public Notice(String id, University university, Staff author, String title, String content, String department,
                   NoticeType type) {
         this.id = id;
@@ -64,5 +70,10 @@ public class Notice extends BaseTimeEntity {
 
     public void assignRecipientCount(int count) {
         this.totalRecipientCount = count;
+    }
+
+    public void assignBannerPeriod(LocalDate startDate, LocalDate endDate) {
+        this.bannerStartDate = startDate;
+        this.bannerEndDate = endDate;
     }
 }

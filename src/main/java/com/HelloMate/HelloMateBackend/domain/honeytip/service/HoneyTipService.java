@@ -6,6 +6,7 @@ import com.HelloMate.HelloMateBackend.domain.honeytip.dto.request.ReviewEditRequ
 import com.HelloMate.HelloMateBackend.domain.honeytip.dto.request.UpdateHoneyTipRequest;
 import com.HelloMate.HelloMateBackend.domain.honeytip.dto.response.HoneyTipEditResponse;
 import com.HelloMate.HelloMateBackend.domain.honeytip.dto.response.HoneyTipResponse;
+import com.HelloMate.HelloMateBackend.domain.honeytip.dto.response.HoneyTipStep;
 import com.HelloMate.HelloMateBackend.domain.honeytip.entity.HoneyTip;
 import com.HelloMate.HelloMateBackend.domain.honeytip.entity.HoneyTipEdit;
 import com.HelloMate.HelloMateBackend.domain.honeytip.repository.HoneyTipEditRepository;
@@ -37,11 +38,12 @@ public class HoneyTipService {
     private final StaffService staffService;
     private final StudentRepository studentRepository;
     private final NotificationService notificationService;
+    private final HoneyTipStepCodec honeyTipStepCodec;
 
     public List<HoneyTipResponse> getHoneyTips(String studentId, String category) {
         Student student = studentService.getStudent(studentId);
         return honeyTipRepository.search(student.getUniversity().getId(), category).stream()
-                .map(HoneyTipResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -49,7 +51,7 @@ public class HoneyTipService {
     public HoneyTipResponse getHoneyTipDetail(String honeyTipId) {
         HoneyTip honeyTip = getHoneyTip(honeyTipId);
         honeyTip.increaseView();
-        return HoneyTipResponse.from(honeyTip);
+        return toResponse(honeyTip);
     }
 
     @Transactional
@@ -64,6 +66,8 @@ public class HoneyTipService {
         Staff author = staffService.getStaff(staffId);
         HoneyTip honeyTip = new HoneyTip(UuidCreator.create(), author.getUniversity(), author,
                 request.category(), request.title(), request.content());
+        honeyTip.updateGuide(request.tipMessage(), honeyTipStepCodec.encode(request.steps()),
+                request.estimatedFee(), request.processingPeriod(), request.externalLink());
         honeyTipRepository.save(honeyTip);
 
         for (Student student : studentRepository.findAllByUniversityId(author.getUniversity().getId())) {
@@ -71,14 +75,16 @@ public class HoneyTipService {
                     "honey_tip", honeyTip.getId());
         }
 
-        return HoneyTipResponse.from(honeyTip);
+        return toResponse(honeyTip);
     }
 
     @Transactional
     public HoneyTipResponse updateHoneyTip(String honeyTipId, UpdateHoneyTipRequest request) {
         HoneyTip honeyTip = getHoneyTip(honeyTipId);
         honeyTip.updateContent(request.category(), request.title(), request.content());
-        return HoneyTipResponse.from(honeyTip);
+        honeyTip.updateGuide(request.tipMessage(), honeyTipStepCodec.encode(request.steps()),
+                request.estimatedFee(), request.processingPeriod(), request.externalLink());
+        return toResponse(honeyTip);
     }
 
     public List<HoneyTipEditResponse> getEditRequests(String honeyTipId) {
@@ -93,6 +99,11 @@ public class HoneyTipService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.HONEY_TIP_EDIT_REQUEST_NOT_FOUND));
         edit.review(request.status());
         return HoneyTipEditResponse.from(edit);
+    }
+
+    private HoneyTipResponse toResponse(HoneyTip honeyTip) {
+        List<HoneyTipStep> steps = honeyTipStepCodec.decode(honeyTip.getStepsJson());
+        return HoneyTipResponse.of(honeyTip, steps);
     }
 
     private HoneyTip getHoneyTip(String honeyTipId) {

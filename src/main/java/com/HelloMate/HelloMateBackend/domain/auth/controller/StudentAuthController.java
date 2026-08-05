@@ -1,6 +1,7 @@
 package com.HelloMate.HelloMateBackend.domain.auth.controller;
 
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.CheckEmailRequest;
+import com.HelloMate.HelloMateBackend.domain.auth.dto.request.CheckLoginIdRequest;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.EmailVerificationConfirmRequest;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.EmailVerificationRequest;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.PasswordResetEmailRequest;
@@ -9,6 +10,7 @@ import com.HelloMate.HelloMateBackend.domain.auth.dto.request.PasswordResetVerif
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.RefreshTokenRequest;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.StudentLoginRequest;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.StudentSignUpRequest;
+import com.HelloMate.HelloMateBackend.domain.auth.dto.response.AvailabilityResponse;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.response.PasswordResetVerifyResponse;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.response.StudentSignUpResponse;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.response.TokenResponse;
@@ -55,10 +57,14 @@ public class StudentAuthController {
         return ApiResponse.ok(null);
     }
 
+    @PostMapping("/check-login-id")
+    public ApiResponse<AvailabilityResponse> checkLoginId(@Valid @RequestBody CheckLoginIdRequest request) {
+        return ApiResponse.ok(studentAuthService.checkLoginIdAvailable(request.loginId()));
+    }
+
     @PostMapping("/check-email")
-    public ApiResponse<Void> checkEmail(@Valid @RequestBody CheckEmailRequest request) {
-        studentAuthService.checkEmailAvailable(request.email());
-        return ApiResponse.ok(null);
+    public ApiResponse<AvailabilityResponse> checkEmail(@Valid @RequestBody CheckEmailRequest request) {
+        return ApiResponse.ok(studentAuthService.checkEmailAvailable(request.email()));
     }
 
     @PostMapping("/email-verifications")

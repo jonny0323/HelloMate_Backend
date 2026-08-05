@@ -61,4 +61,9 @@ public class PostComment extends BaseTimeEntity {
     public void decreaseLike() {
         this.likeCount = Math.max(0, this.likeCount - 1);
     }
+
+    /** 디자인의 대댓글은 ↳ 한 단계뿐이라 그 이상 중첩되면 화면이 표현할 수 없다. */
+    public boolean isReply() {
+        return this.parentComment != null;
+    }
 }

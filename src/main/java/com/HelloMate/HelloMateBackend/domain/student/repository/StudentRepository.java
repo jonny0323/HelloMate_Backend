@@ -14,7 +14,11 @@ public interface StudentRepository extends JpaRepository<Student, String> {
 
     boolean existsByEmail(String email);
 
+    boolean existsByLoginId(String loginId);
+
     Optional<Student> findByEmail(String email);
+
+    Optional<Student> findByLoginId(String loginId);
 
     @Query("select s from Student s where s.university.id = :universityId "
             + "and (:keyword is null or s.name like %:keyword% or s.email like %:keyword%) "

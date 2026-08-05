@@ -1,5 +1,9 @@
 # 학생 앱 API 레퍼런스 (요청/정상 응답/에러 응답)
 
+> **2026-08-05 갱신** — 피그마 기능 패리티 작업으로 로그인 식별자가 이메일에서 **아이디(`loginId`)** 로
+> 바뀌었고, 신규 엔드포인트 7개가 추가됐다. 변경 요약은
+> `docs/reports/2026-08-05-figma-feature-parity.md`를 볼 것. 아래 본문은 그 결과를 반영해 갱신했다.
+
 `docs/resources/api.md`(화면별 구현 상태 분석), `docs/resources/api-errors.md`(에러 코드만 정리)를 바탕으로,
 실제 구현된 API 각각에 대해 요청·정상 응답·에러 응답을 한 곳에 모았다. 모든 예시는 실제 컨트롤러/서비스/DTO
 코드를 근거로 작성했다 (허구 필드 없음). 화면 섹션 순서는 `api.md`와 동일하게 맞췄다.
@@ -26,8 +30,10 @@
 
 요청
 ```json
-{ "email": "student123@inu.ac.kr", "password": "pa1234" }
+{ "loginId": "hellomate_student", "password": "pa1234", "autoLogin": true }
 ```
+`autoLogin`은 로그인 화면의 '자동 로그인' 체크박스다. `true`면 리프레시 토큰이 30일, `false`(생략 포함)면
+1일 동안 유효하다.
 
 성공 응답 `200`
 ```json
@@ -73,7 +79,7 @@
 
 ### `POST /auth/students/password-reset/email` — 인증 불필요
 
-비밀번호 재설정용 인증번호를 이메일로 발송한다(코드 유효시간 5분). 실제 발송은 스텁(`StubEmailService`)이라
+비밀번호 재설정용 인증번호를 이메일로 발송한다(코드 유효시간 3분). 실제 발송은 스텁(`StubEmailService`)이라
 로그에만 코드가 남는다.
 
 요청
@@ -107,7 +113,7 @@
 | status | code | message | 조건 |
 | --- | --- | --- | --- |
 | 400 | `INVALID_VERIFICATION_CODE` | 인증번호가 일치하지 않아요. | 코드 불일치 또는 이미 사용된 코드 |
-| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 5분 경과 |
+| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 3분 경과 |
 
 ### `PATCH /auth/students/password-reset` — 인증 불필요
 
@@ -133,6 +139,7 @@
 요청 (`StudentType`은 `"교환학생" | "정규과정생" | "어학당 수강생" | "한국인 대학생"` 라벨 문자열)
 ```json
 {
+  "loginId": "hellomate_student",
   "email": "student123@inu.ac.kr",
   "name": "김지수",
   "password": "pa1234",
@@ -141,7 +148,10 @@
   "studentType": "정규과정생",
   "major": "컴퓨터공학부",
   "grade": "1학년",
-  "universityId": "univ-inu"
+  "birthYear": 2001,
+  "universityId": "univ-inu",
+  "termsAgreed": true,
+  "privacyAgreed": true
 }
 ```
 
@@ -159,19 +169,44 @@
 
 | status | code | message | 조건 |
 | --- | --- | --- | --- |
+| 409 | `DUPLICATE_LOGIN_ID` | 이미 사용 중인 아이디입니다. | 아이디 중복 |
 | 409 | `DUPLICATE_ACCOUNT` | 이미 가입된 계정입니다. | 이메일 중복 |
+| 400 | `INVALID_INPUT` | 요청 값이 올바르지 않습니다. | `loginId` 형식 위반(영문 소문자·숫자·`_` 4~20자), 비밀번호 8자 미만/영문·숫자 미포함, 필수 약관 미동의 |
 | 400 | `INVALID_INPUT` | 존재하지 않는 학교입니다. | `universityId`가 `university` 테이블에 없음 (기본 메시지 대신 커스텀 메시지로 내려감) |
+
+### `POST /auth/students/check-login-id` — 인증 불필요
+
+로그인 아이디 중복 확인. 1/3 화면의 "중복 확인" 버튼용.
+
+요청
+```json
+{ "loginId": "hellomate_student" }
+```
+
+성공 응답 `200`
+```json
+{ "success": true, "data": { "available": true, "message": "사용할 수 있는 아이디예요" }, "meta": null, "error": null }
+```
+
+에러 응답
+
+| status | code | message | 조건 |
+| --- | --- | --- | --- |
+| 409 | `DUPLICATE_LOGIN_ID` | 이미 사용 중인 아이디입니다. | 아이디 중복 |
 
 ### `POST /auth/students/check-email` — 인증 불필요
 
-이메일(로그인 아이디) 중복 확인. 1/3 화면의 "중복 확인" 버튼용.
+가입 이메일 중복 확인.
 
 요청
 ```json
 { "email": "student123@inu.ac.kr" }
 ```
 
-성공 응답 `200`(사용 가능): `data: null`
+성공 응답 `200`
+```json
+{ "success": true, "data": { "available": true, "message": "사용할 수 있는 이메일이에요" }, "meta": null, "error": null }
+```
 
 에러 응답
 
@@ -181,7 +216,7 @@
 
 ### `POST /auth/students/email-verifications` — 인증 불필요
 
-가입 단계 학교 이메일 인증(서류 인증과 별개 트랙). 코드 유효시간 5분. 학교 공식 이메일(`.ac.kr`/`.edu`
+가입 단계 학교 이메일 인증(서류 인증과 별개 트랙). 코드 유효시간 3분. 학교 공식 이메일(`.ac.kr`/`.edu`
 접미사)만 허용 — 학교별 도메인 화이트리스트는 아직 없음(스텁 수준 검증).
 
 요청
@@ -211,7 +246,7 @@
 | status | code | message | 조건 |
 | --- | --- | --- | --- |
 | 400 | `INVALID_VERIFICATION_CODE` | 인증번호가 일치하지 않아요. | 코드 불일치 또는 이미 사용된 코드 |
-| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 5분 경과 |
+| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 3분 경과 |
 
 ### `GET /universities/{universityId}/majors?query=` — 인증 불필요
 
@@ -853,7 +888,7 @@
 | status | code | message | 조건 |
 | --- | --- | --- | --- |
 | 400 | `INVALID_VERIFICATION_CODE` | 인증번호가 일치하지 않아요. | 코드 불일치 또는 이미 사용된 코드 |
-| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 5분 경과 |
+| 400 | `VERIFICATION_CODE_EXPIRED` | 인증번호가 만료되었습니다. | 발송 후 3분 경과 |
 
 ---
 
@@ -870,7 +905,8 @@
   "data": [
     {
       "id": "post_01h...",
-      "anonName": "익명 1",
+      "authorName": "익명 1",
+      "anonymous": true,
       "title": null,
       "content": "Does anyone know a good Tteokbokki place near the central library?",
       "originalLang": "en",
@@ -883,8 +919,9 @@
   "error": null
 }
 ```
-`anonName`은 게시글마다 매번 랜덤 배정되는 게 아니라 같은 게시글/댓글 스레드 안에서 같은 작성자에게 고정된
-별명이다(`PostAnonService`).
+`authorName`은 익명 글이면 `"익명 N"`, 실명 글(`anonymous: false`)이면 작성자 이름이다. 익명 별명은 매번
+랜덤 배정되는 게 아니라 같은 게시글/댓글 스레드 안에서 같은 작성자에게 고정된다(`PostAnonService`).
+댓글은 항상 익명이라 `anonName` 필드를 그대로 쓴다.
 
 ### `GET /posts/mine?cursor=&limit=`
 
@@ -897,12 +934,12 @@
 
 요청 — 어떤 언어로 작성해도 됨(서버가 `originalLang`을 자동 감지).
 ```json
-{ "title": "한국 음식 그리울 때 다들 어디 가세요?", "content": "요즘 김치찌개가 너무 먹고 싶네요... 추천 맛집 부탁드려요!" }
+{ "title": "한국 음식 그리울 때 다들 어디 가세요?", "content": "요즘 김치찌개가 너무 먹고 싶네요... 추천 맛집 부탁드려요!", "anonymous": true }
 ```
 
 성공 응답 `201`
 ```json
-{ "success": true, "data": { "id": "post_02h...", "anonName": "익명 5", "createdAt": "2026-08-04T10:00:00" }, "meta": null, "error": null }
+{ "success": true, "data": { "id": "post_02h...", "authorName": "익명 5", "anonymous": true, "createdAt": "2026-08-04T10:00:00" }, "meta": null, "error": null }
 ```
 
 ### `GET /posts/{postId}`
@@ -915,7 +952,9 @@
   "success": true,
   "data": {
     "id": "post_01h...",
-    "anonName": "익명 2",
+    "authorName": "익명 2",
+    "anonymous": true,
+    "mine": false,
     "title": "기숙사 세탁기가 고장 난 것 같은데",
     "originalLang": "zh",
     "content": "宿舍里的洗衣机好像坏了，有人知道该联系谁修理吗？",

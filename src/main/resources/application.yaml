@@ -40,6 +40,7 @@ hellomate:
   jwt:
     secret: "hellomate-local-dev-secret-key-change-me-in-production-0123456789"
     access-token-validity-ms: 3600000      # 1h
-    refresh-token-validity-ms: 1209600000  # 14d
+    refresh-token-validity-ms: 86400000    # 1d  (자동 로그인 미체크)
+    refresh-token-validity-auto-login-ms: 2592000000  # 30d (자동 로그인 체크)
   file:
     base-url: "https://cdn.hellomate.app"

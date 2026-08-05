@@ -44,6 +44,26 @@ public class HoneyTip extends BaseTimeEntity {
     @Column(nullable = false)
     private int viewCount;
 
+    /** 정보글 상세 상단의 ℹ️ 하이라이트 문구. */
+    @Column(length = 300)
+    private String tipMessage;
+
+    /**
+     * 번호가 매겨진 STEP 목록. 관리자가 통째로 저장/수정하고 서버는 조회 시 파싱만 하며
+     * STEP 단위로 질의할 일이 없어서 별도 테이블 대신 JSON 문자열로 담는다.
+     */
+    @Column(columnDefinition = "TEXT")
+    private String stepsJson;
+
+    @Column(length = 50)
+    private String estimatedFee;
+
+    @Column(length = 50)
+    private String processingPeriod;
+
+    @Column(length = 500)
+    private String externalLink;
+
     public HoneyTip(String id, University university, Staff author, String category, String title, String content) {
         this.id = id;
         this.university = university;
@@ -52,6 +72,15 @@ public class HoneyTip extends BaseTimeEntity {
         this.title = title;
         this.content = content;
         this.viewCount = 0;
+    }
+
+    public void updateGuide(String tipMessage, String stepsJson, String estimatedFee, String processingPeriod,
+                             String externalLink) {
+        this.tipMessage = tipMessage;
+        this.stepsJson = stepsJson;
+        this.estimatedFee = estimatedFee;
+        this.processingPeriod = processingPeriod;
+        this.externalLink = externalLink;
     }
 
     public void increaseView() {

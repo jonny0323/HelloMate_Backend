@@ -3,6 +3,8 @@ package com.HelloMate.HelloMateBackend.domain.club.entity;
 import com.HelloMate.HelloMateBackend.domain.student.entity.Student;
 import com.HelloMate.HelloMateBackend.domain.university.entity.University;
 import com.HelloMate.HelloMateBackend.global.common.entity.BaseTimeEntity;
+import com.HelloMate.HelloMateBackend.global.common.exception.BusinessException;
+import com.HelloMate.HelloMateBackend.global.common.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -69,8 +71,48 @@ public class Club extends BaseTimeEntity {
         return currentMembers >= maxMembers;
     }
 
+    /** deadline은 날짜 단위라 그날 하루는 열려 있는 것으로 본다(마감 판정은 다음 날 00:00부터). */
+    public boolean isDeadlinePassed() {
+        return deadline.isBefore(LocalDate.now());
+    }
+
+    /** 정원이 남아 있어도 마감일이 지났으면 더 이상 모집하지 않는다. */
+    public boolean isRecruitClosed() {
+        return isFull() || isDeadlinePassed();
+    }
+
+    public ClubCardState resolveCardState(boolean joined) {
+        if (joined) {
+            return ClubCardState.JOINED;
+        }
+        return isRecruitClosed() ? ClubCardState.CLOSED : ClubCardState.JOINABLE;
+    }
+
+    public int remainingSeats() {
+        return Math.max(0, maxMembers - currentMembers);
+    }
+
+    /** 정원/마감 검증을 엔티티 안에 두어 어느 경로로 참여하든 같은 규칙을 타게 한다. */
+    public void join() {
+        if (isDeadlinePassed()) {
+            throw new BusinessException(ErrorCode.CLUB_RECRUIT_CLOSED);
+        }
+        if (isFull()) {
+            throw new BusinessException(ErrorCode.CLUB_FULL);
+        }
+        this.currentMembers++;
+    }
+
     public void increaseMember() {
         this.currentMembers++;
+    }
+
+    public boolean isCreator(String studentId) {
+        return this.creator.getId().equals(studentId);
+    }
+
+    public void changeCreator(Student newCreator) {
+        this.creator = newCreator;
     }
 
     public void decreaseMember() {

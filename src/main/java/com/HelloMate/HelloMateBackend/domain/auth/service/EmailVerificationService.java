@@ -24,7 +24,15 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class EmailVerificationService {
 
-    private static final int CODE_VALIDITY_MINUTES = 5;
+    /** 디자인의 인증번호 타이머가 03:00에서 시작한다. */
+    private static final int CODE_VALIDITY_MINUTES = 3;
+
+    /** 6자리(10^6)는 무제한 재시도를 허용하면 뚫린다. */
+    private static final int MAX_ATTEMPT = 5;
+
+    /** [인증 번호 재발송] 연타로 메일 발송량이 튀는 걸 막는다. */
+    private static final int RESEND_COOLDOWN_SECONDS = 60;
+
     private static final List<String> ALLOWED_SCHOOL_EMAIL_SUFFIXES = List.of(".ac.kr", ".edu");
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -36,6 +44,7 @@ public class EmailVerificationService {
         if (purpose == EmailVerificationPurpose.SIGNUP && !isSchoolEmail(email)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "학교 공식 이메일만 사용할 수 있습니다.");
         }
+        requireResendCooldownPassed(email, purpose);
 
         String code = generateCode();
         EmailVerification verification = new EmailVerification(
@@ -50,11 +59,20 @@ public class EmailVerificationService {
                 .findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_VERIFICATION_CODE));
 
-        if (verification.isUsed() || !verification.matches(code)) {
+        if (verification.isUsed()) {
             throw new BusinessException(ErrorCode.INVALID_VERIFICATION_CODE);
         }
         if (verification.isExpired()) {
             throw new BusinessException(ErrorCode.VERIFICATION_CODE_EXPIRED);
+        }
+        if (verification.isAttemptExceeded(MAX_ATTEMPT)) {
+            throw new BusinessException(ErrorCode.VERIFICATION_ATTEMPT_EXCEEDED);
+        }
+
+        // 시도 횟수는 성공/실패와 무관하게 먼저 올린다 — 실패 경로에서 예외로 빠져나가도 카운트가 남아야 한다.
+        verification.increaseAttemptCount();
+        if (!verification.matches(code)) {
+            throw new BusinessException(ErrorCode.INVALID_VERIFICATION_CODE);
         }
 
         String resetToken = purpose == EmailVerificationPurpose.PASSWORD_RESET ? UuidCreator.create() : null;
@@ -72,6 +90,15 @@ public class EmailVerificationService {
         }
         verification.invalidateResetToken();
         return verification;
+    }
+
+    private void requireResendCooldownPassed(String email, EmailVerificationPurpose purpose) {
+        emailVerificationRepository.findTopByEmailAndPurposeOrderByCreatedAtDesc(email, purpose)
+                .filter(latest -> latest.getCreatedAt() != null)
+                .filter(latest -> latest.getCreatedAt().plusSeconds(RESEND_COOLDOWN_SECONDS).isAfter(LocalDateTime.now()))
+                .ifPresent(latest -> {
+                    throw new BusinessException(ErrorCode.VERIFICATION_RESEND_TOO_SOON);
+                });
     }
 
     private boolean isSchoolEmail(String email) {

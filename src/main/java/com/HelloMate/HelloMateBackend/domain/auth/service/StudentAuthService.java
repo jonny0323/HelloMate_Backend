@@ -2,6 +2,7 @@ package com.HelloMate.HelloMateBackend.domain.auth.service;
 
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.StudentLoginRequest;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.request.StudentSignUpRequest;
+import com.HelloMate.HelloMateBackend.domain.auth.dto.response.AvailabilityResponse;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.response.PasswordResetVerifyResponse;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.response.StudentSignUpResponse;
 import com.HelloMate.HelloMateBackend.domain.auth.dto.response.TokenResponse;
@@ -39,6 +40,9 @@ public class StudentAuthService {
 
     @Transactional
     public StudentSignUpResponse signUp(StudentSignUpRequest request) {
+        if (studentRepository.existsByLoginId(request.loginId())) {
+            throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_ID);
+        }
         if (studentRepository.existsByEmail(request.email())) {
             throw new BusinessException(ErrorCode.DUPLICATE_ACCOUNT);
         }
@@ -48,6 +52,7 @@ public class StudentAuthService {
         Student student = new Student(
                 UuidCreator.create(),
                 university,
+                request.loginId(),
                 request.email(),
                 request.name(),
                 passwordEncoder.encode(request.password()),
@@ -55,20 +60,34 @@ public class StudentAuthService {
                 request.language(),
                 request.studentType(),
                 request.major(),
-                request.grade()
+                request.grade(),
+                request.birthYear()
         );
+        student.agreeTerms();
         studentRepository.save(student);
         return new StudentSignUpResponse(student.getId(), student.getName());
     }
 
+    /**
+     * 아이디/비밀번호 중 무엇이 틀렸는지 구분하지 않는다 — 구분해서 알려주면 가입된 아이디 목록을
+     * 긁어낼 수 있다(계정 열거). 디자인의 오류 문구도 하나로 통일되어 있다.
+     */
     @Transactional
     public TokenResponse login(StudentLoginRequest request) {
-        Student student = studentRepository.findByEmail(request.email())
+        Student student = studentRepository.findByLoginId(request.loginId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
+        if (student.isWithdrawn()) {
+            throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
+        }
+        if (student.isLocked()) {
+            throw new BusinessException(ErrorCode.ACCOUNT_LOCKED);
+        }
         if (!passwordEncoder.matches(request.password(), student.getPassword())) {
+            student.increaseLoginFailCount();
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
-        return issueTokens(student.getId());
+        student.unlock();
+        return issueTokens(student.getId(), request.autoLogin());
     }
 
     @Transactional
@@ -93,18 +112,32 @@ public class StudentAuthService {
         refreshTokenRepository.deleteBySubjectIdAndRole(studentId, Role.STUDENT);
     }
 
-    public void checkEmailAvailable(String email) {
+    public AvailabilityResponse checkLoginIdAvailable(String loginId) {
+        if (studentRepository.existsByLoginId(loginId)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_ID);
+        }
+        return AvailabilityResponse.available("사용할 수 있는 아이디예요");
+    }
+
+    public AvailabilityResponse checkEmailAvailable(String email) {
         if (studentRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_ACCOUNT);
         }
+        return AvailabilityResponse.available("사용할 수 있는 이메일이에요");
     }
 
     public void sendSignupVerificationCode(String email) {
         emailVerificationService.sendCode(email, EmailVerificationPurpose.SIGNUP);
     }
 
+    /**
+     * 이메일 인증은 학생 인증의 두 경로 중 하나다. 성공하면 해당 이메일의 계정을 곧바로 VERIFIED로
+     * 올린다. 가입 도중(계정 생성 전)이라 계정이 아직 없으면 코드 확인만 하고 넘어간다.
+     */
+    @Transactional
     public void confirmSignupVerificationCode(String email, String code) {
         emailVerificationService.confirmCode(email, code, EmailVerificationPurpose.SIGNUP);
+        studentRepository.findByEmail(email).ifPresent(Student::verifyByEmail);
     }
 
     public void sendPasswordResetCode(String email) {
@@ -118,19 +151,21 @@ public class StudentAuthService {
         return new PasswordResetVerifyResponse(verification.getResetToken());
     }
 
+    /** 비밀번호를 바꾸면 기존 세션을 전부 끊는다 — 계정을 탈취당한 상태에서 되찾는 경로이기 때문. */
     @Transactional
     public void resetPassword(String resetToken, String newPassword) {
         EmailVerification verification = emailVerificationService.consumeResetToken(resetToken);
         Student student = studentRepository.findByEmail(verification.getEmail())
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
         student.updatePassword(passwordEncoder.encode(newPassword));
+        refreshTokenRepository.deleteBySubjectIdAndRole(student.getId(), Role.STUDENT);
     }
 
-    private TokenResponse issueTokens(String studentId) {
+    private TokenResponse issueTokens(String studentId, boolean autoLogin) {
         String accessToken = jwtTokenProvider.createAccessToken(studentId, Role.STUDENT);
-        String refreshToken = jwtTokenProvider.createRefreshToken(studentId, Role.STUDENT);
+        String refreshToken = jwtTokenProvider.createRefreshToken(studentId, Role.STUDENT, autoLogin);
         refreshTokenRepository.save(new RefreshToken(studentId, Role.STUDENT, refreshToken,
-                expiryOf(jwtTokenProvider.getRefreshTokenValidityMs())));
+                expiryOf(jwtTokenProvider.getRefreshTokenValidityMs(autoLogin))));
         return new TokenResponse(accessToken, refreshToken);
     }
 

@@ -2,6 +2,7 @@ package com.HelloMate.HelloMateBackend.domain.club.controller;
 
 import com.HelloMate.HelloMateBackend.domain.club.dto.request.CreateClubRequest;
 import com.HelloMate.HelloMateBackend.domain.club.dto.request.SendClubMessageRequest;
+import com.HelloMate.HelloMateBackend.domain.club.dto.request.TransferClubOwnerRequest;
 import com.HelloMate.HelloMateBackend.domain.club.dto.request.UpdateClubRequest;
 import com.HelloMate.HelloMateBackend.domain.club.dto.response.ClubMemberResponse;
 import com.HelloMate.HelloMateBackend.domain.club.dto.response.ClubMessageResponse;
@@ -54,8 +55,8 @@ public class ClubController {
     }
 
     @GetMapping("/{clubId}")
-    public ApiResponse<ClubResponse> getClubDetail(@PathVariable String clubId) {
-        return ApiResponse.ok(clubService.getClubDetail(clubId));
+    public ApiResponse<ClubResponse> getClubDetail(@CurrentUser AuthPrincipal principal, @PathVariable String clubId) {
+        return ApiResponse.ok(clubService.getClubDetail(principal.id(), clubId));
     }
 
     @PatchMapping("/{clubId}")
@@ -80,6 +81,12 @@ public class ClubController {
     public ApiResponse<Void> leave(@CurrentUser AuthPrincipal principal, @PathVariable String clubId) {
         clubService.leave(principal.id(), clubId);
         return ApiResponse.ok(null);
+    }
+
+    @PatchMapping("/{clubId}/owner")
+    public ApiResponse<ClubResponse> transferOwner(@CurrentUser AuthPrincipal principal, @PathVariable String clubId,
+                                                    @Valid @RequestBody TransferClubOwnerRequest request) {
+        return ApiResponse.ok(clubService.transferOwner(principal.id(), clubId, request.newCreatorId()));
     }
 
     @GetMapping("/{clubId}/members")

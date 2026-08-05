@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public record CreateNoticeRequest(
@@ -13,6 +14,8 @@ public record CreateNoticeRequest(
         @NotBlank String department,
         @NotNull NoticeType type,
         @NotNull @Valid AudienceRequest audience,
-        List<String> files
+        List<String> files,
+        LocalDate bannerStartDate,
+        LocalDate bannerEndDate
 ) {
 }

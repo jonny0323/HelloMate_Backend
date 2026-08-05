@@ -38,6 +38,12 @@ public class NotificationController {
         return ApiResponse.ok(notificationService.toResponseList(slice), notificationService.cursorMetaOf(slice));
     }
 
+    @PatchMapping("/read-all")
+    public ApiResponse<NotificationUnreadCountResponse> markAllRead(@CurrentUser AuthPrincipal principal) {
+        notificationService.markAllRead(principal.id());
+        return ApiResponse.ok(notificationService.getUnreadCount(principal.id()));
+    }
+
     @PatchMapping("/{notificationId}/read")
     public ApiResponse<Void> markRead(@CurrentUser AuthPrincipal principal, @PathVariable String notificationId) {
         notificationService.markRead(principal.id(), notificationId);

@@ -24,13 +24,16 @@ public class JwtTokenProvider {
     private final SecretKey key;
     private final long accessTokenValidityMs;
     private final long refreshTokenValidityMs;
+    private final long autoLoginRefreshTokenValidityMs;
 
     public JwtTokenProvider(@Value("${hellomate.jwt.secret}") String secret,
                              @Value("${hellomate.jwt.access-token-validity-ms}") long accessTokenValidityMs,
-                             @Value("${hellomate.jwt.refresh-token-validity-ms}") long refreshTokenValidityMs) {
+                             @Value("${hellomate.jwt.refresh-token-validity-ms}") long refreshTokenValidityMs,
+                             @Value("${hellomate.jwt.refresh-token-validity-auto-login-ms}") long autoLoginRefreshTokenValidityMs) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessTokenValidityMs = accessTokenValidityMs;
         this.refreshTokenValidityMs = refreshTokenValidityMs;
+        this.autoLoginRefreshTokenValidityMs = autoLoginRefreshTokenValidityMs;
     }
 
     public String createAccessToken(String subjectId, Role role) {
@@ -38,7 +41,12 @@ public class JwtTokenProvider {
     }
 
     public String createRefreshToken(String subjectId, Role role) {
-        return createToken(subjectId, role, refreshTokenValidityMs, "refresh");
+        return createRefreshToken(subjectId, role, false);
+    }
+
+    /** 로그인 화면의 '자동 로그인' 체크 여부에 따라 리프레시 토큰 수명을 30일/1일로 나눈다. */
+    public String createRefreshToken(String subjectId, Role role, boolean autoLogin) {
+        return createToken(subjectId, role, getRefreshTokenValidityMs(autoLogin), "refresh");
     }
 
     public long getAccessTokenValidityMs() {
@@ -47,6 +55,10 @@ public class JwtTokenProvider {
 
     public long getRefreshTokenValidityMs() {
         return refreshTokenValidityMs;
+    }
+
+    public long getRefreshTokenValidityMs(boolean autoLogin) {
+        return autoLogin ? autoLoginRefreshTokenValidityMs : refreshTokenValidityMs;
     }
 
     private String createToken(String subjectId, Role role, long validityMs, String tokenType) {

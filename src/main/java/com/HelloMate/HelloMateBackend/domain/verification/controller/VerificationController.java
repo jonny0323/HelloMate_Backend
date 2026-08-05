@@ -2,6 +2,7 @@ package com.HelloMate.HelloMateBackend.domain.verification.controller;
 
 import com.HelloMate.HelloMateBackend.domain.verification.dto.request.SubmitVerificationDocumentRequest;
 import com.HelloMate.HelloMateBackend.domain.verification.dto.response.VerificationDocumentResponse;
+import com.HelloMate.HelloMateBackend.domain.verification.dto.response.VerificationStatusResponse;
 import com.HelloMate.HelloMateBackend.domain.verification.service.VerificationService;
 import com.HelloMate.HelloMateBackend.global.common.response.ApiResponse;
 import com.HelloMate.HelloMateBackend.global.security.AuthPrincipal;
@@ -27,11 +28,16 @@ public class VerificationController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<VerificationDocumentResponse> submit(@CurrentUser AuthPrincipal principal,
                                                              @Valid @RequestBody SubmitVerificationDocumentRequest request) {
-        return ApiResponse.ok(verificationService.submit(principal.id(), request.fileId()));
+        return ApiResponse.ok(verificationService.submit(principal.id(), request));
     }
 
     @GetMapping
     public ApiResponse<VerificationDocumentResponse> getMyDocument(@CurrentUser AuthPrincipal principal) {
         return ApiResponse.ok(verificationService.getMyDocument(principal.id()));
+    }
+
+    @GetMapping("/status")
+    public ApiResponse<VerificationStatusResponse> getMyStatus(@CurrentUser AuthPrincipal principal) {
+        return ApiResponse.ok(verificationService.getMyStatus(principal.id()));
     }
 }

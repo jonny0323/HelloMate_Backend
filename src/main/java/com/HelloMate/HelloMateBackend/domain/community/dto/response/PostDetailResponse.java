@@ -6,7 +6,9 @@ import java.util.List;
 
 public record PostDetailResponse(
         String id,
-        String anonName,
+        String authorName,
+        boolean anonymous,
+        boolean mine,
         String title,
         String originalLang,
         String content,

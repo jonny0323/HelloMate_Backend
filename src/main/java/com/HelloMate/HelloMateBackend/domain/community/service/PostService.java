@@ -2,6 +2,7 @@ package com.HelloMate.HelloMateBackend.domain.community.service;
 
 import com.HelloMate.HelloMateBackend.domain.community.dto.request.CreateCommentRequest;
 import com.HelloMate.HelloMateBackend.domain.community.dto.request.CreatePostRequest;
+import com.HelloMate.HelloMateBackend.domain.community.dto.request.UpdatePostRequest;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.CreatePostResponse;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.MyCommentResponse;
 import com.HelloMate.HelloMateBackend.domain.community.dto.response.PostCommentResponse;
@@ -58,10 +59,20 @@ public class PostService {
         Student author = studentService.getStudent(studentId);
         String originalLang = LanguageDetector.detect(request.content());
         Post post = new Post(UuidCreator.create(), author.getUniversity(), author, request.title(),
-                request.content(), originalLang);
+                request.content(), originalLang, request.isAnonymous());
         postRepository.save(post);
-        String anonName = postAnonService.getOrAssignAnonName(post, author);
-        return new CreatePostResponse(post.getId(), anonName, post.getCreatedAt());
+        return new CreatePostResponse(post.getId(), resolveAuthorName(post, author), post.isAnonymous(),
+                post.getCreatedAt());
+    }
+
+    @Transactional
+    public PostSummaryResponse updatePost(String studentId, String postId, UpdatePostRequest request) {
+        Post post = getPost(postId);
+        if (!post.getAuthor().getId().equals(studentId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        post.update(request.title(), request.content(), LanguageDetector.detect(request.content()));
+        return PostSummaryResponse.of(post, resolveAuthorName(post, post.getAuthor()));
     }
 
     public Slice<Post> getPostSlice(String studentId, String keyword, String cursor, int limit) {
@@ -73,7 +84,7 @@ public class PostService {
     @Transactional
     public List<PostSummaryResponse> toSummaryList(Slice<Post> slice) {
         return slice.getContent().stream()
-                .map(post -> PostSummaryResponse.of(post, postAnonService.getOrAssignAnonName(post, post.getAuthor())))
+                .map(post -> PostSummaryResponse.of(post, resolveAuthorName(post, post.getAuthor())))
                 .toList();
     }
 
@@ -120,7 +131,7 @@ public class PostService {
         Student viewer = studentService.getStudent(studentId);
         String targetLang = AcceptLanguageUtil.primaryLanguage(acceptLanguageHeader);
 
-        String anonName = postAnonService.getOrAssignAnonName(post, post.getAuthor());
+        String authorName = resolveAuthorName(post, post.getAuthor());
         boolean likedByMe = postLikeRepository.existsByPostIdAndStudentId(postId, studentId);
         TranslatedContent translated = resolveTranslation(TranslationContentType.POST, postId, post.getContent(),
                 post.getOriginalLang(), targetLang);
@@ -149,8 +160,9 @@ public class PostService {
                 })
                 .toList();
 
-        return new PostDetailResponse(post.getId(), anonName, post.getTitle(), post.getOriginalLang(), post.getContent(),
-                translated, post.getLikeCount(), likedByMe, post.getCommentCount(), commentResponses);
+        return new PostDetailResponse(post.getId(), authorName, post.isAnonymous(),
+                post.getAuthor().getId().equals(viewer.getId()), post.getTitle(), post.getOriginalLang(),
+                post.getContent(), translated, post.getLikeCount(), likedByMe, post.getCommentCount(), commentResponses);
     }
 
     @Transactional
@@ -193,6 +205,9 @@ public class PostService {
         PostComment parent = request.parentCommentId() == null ? null
                 : postCommentRepository.findById(request.parentCommentId())
                         .orElseThrow(() -> new BusinessException(ErrorCode.COMMENT_NOT_FOUND));
+        if (parent != null && parent.isReply()) {
+            throw new BusinessException(ErrorCode.REPLY_DEPTH_EXCEEDED);
+        }
 
         String originalLang = LanguageDetector.detect(request.content());
         PostComment comment = new PostComment(UuidCreator.create(), post, author, parent, request.content(), originalLang);
@@ -240,6 +255,11 @@ public class PostService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_LIKED_YET));
         postCommentLikeRepository.delete(like);
         like.getComment().decreaseLike();
+    }
+
+    /** 댓글은 디자인상 항상 익명이라 게시글만 실명 여부를 따진다. */
+    private String resolveAuthorName(Post post, Student author) {
+        return post.isAnonymous() ? postAnonService.getOrAssignAnonName(post, author) : author.getName();
     }
 
     public Post getPost(String postId) {

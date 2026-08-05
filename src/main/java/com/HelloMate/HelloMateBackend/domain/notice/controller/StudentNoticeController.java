@@ -1,6 +1,7 @@
 package com.HelloMate.HelloMateBackend.domain.notice.controller;
 
 import com.HelloMate.HelloMateBackend.domain.notice.dto.response.NoticeFileResponse;
+import com.HelloMate.HelloMateBackend.domain.notice.dto.response.NoticeHomeResponse;
 import com.HelloMate.HelloMateBackend.domain.notice.dto.response.StudentNoticeDetailResponse;
 import com.HelloMate.HelloMateBackend.domain.notice.dto.response.UnreadCountResponse;
 import com.HelloMate.HelloMateBackend.domain.notice.entity.NoticeReception;
@@ -36,6 +37,11 @@ public class StudentNoticeController {
                                              @RequestParam(defaultValue = "20") int limit) {
         Slice<NoticeReception> slice = noticeQueryService.getMyNoticeSlice(principal.id(), q, cursor, limit);
         return ApiResponse.ok(noticeQueryService.toResponseData(slice, groupBy), noticeQueryService.cursorMetaOf(slice));
+    }
+
+    @GetMapping("/home")
+    public ApiResponse<NoticeHomeResponse> getHome(@CurrentUser AuthPrincipal principal) {
+        return ApiResponse.ok(noticeQueryService.getHome(principal.id()));
     }
 
     @GetMapping("/{noticeId}")

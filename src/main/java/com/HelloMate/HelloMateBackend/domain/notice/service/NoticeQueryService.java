@@ -1,11 +1,14 @@
 package com.HelloMate.HelloMateBackend.domain.notice.service;
 
+import com.HelloMate.HelloMateBackend.domain.notice.dto.response.NoticeBannerResponse;
 import com.HelloMate.HelloMateBackend.domain.notice.dto.response.NoticeFileResponse;
+import com.HelloMate.HelloMateBackend.domain.notice.dto.response.NoticeHomeResponse;
 import com.HelloMate.HelloMateBackend.domain.notice.dto.response.StudentNoticeDetailResponse;
 import com.HelloMate.HelloMateBackend.domain.notice.dto.response.StudentNoticeSummaryResponse;
 import com.HelloMate.HelloMateBackend.domain.notice.dto.response.UnreadCountResponse;
 import com.HelloMate.HelloMateBackend.domain.notice.entity.Notice;
 import com.HelloMate.HelloMateBackend.domain.notice.entity.NoticeReception;
+import com.HelloMate.HelloMateBackend.domain.notice.entity.NoticeType;
 import com.HelloMate.HelloMateBackend.domain.notice.repository.NoticeFileRepository;
 import com.HelloMate.HelloMateBackend.domain.notice.repository.NoticeReceptionRepository;
 import com.HelloMate.HelloMateBackend.domain.translation.dto.response.TranslatedContent;
@@ -22,6 +25,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,9 +36,30 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class NoticeQueryService {
 
+    private static final int BANNER_LIMIT = 5;
+    private static final int RECENT_NOTICE_LIMIT = 5;
+
     private final NoticeReceptionRepository noticeReceptionRepository;
     private final NoticeFileRepository noticeFileRepository;
     private final TranslationService translationService;
+
+    /** 화면: 공지사항 홈 (중요 배너 캐러셀 + 최근 공지 목록). */
+    public NoticeHomeResponse getHome(String studentId) {
+        List<NoticeBannerResponse> banners = noticeReceptionRepository
+                .findActiveBanners(studentId, NoticeType.URGENT, LocalDate.now(), PageRequest.of(0, BANNER_LIMIT))
+                .stream()
+                .map(reception -> NoticeBannerResponse.from(reception.getNotice()))
+                .toList();
+
+        List<StudentNoticeSummaryResponse> recentNotices = noticeReceptionRepository
+                .findByStudentIdOrderByCreatedAtDesc(studentId, null, null, PageRequest.of(0, RECENT_NOTICE_LIMIT))
+                .getContent()
+                .stream()
+                .map(StudentNoticeSummaryResponse::from)
+                .toList();
+
+        return new NoticeHomeResponse(banners, recentNotices);
+    }
 
     public Slice<NoticeReception> getMyNoticeSlice(String studentId, String keyword, String cursor, int limit) {
         return noticeReceptionRepository.findByStudentIdOrderByCreatedAtDesc(
